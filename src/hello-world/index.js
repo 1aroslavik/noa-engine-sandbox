@@ -6,6 +6,7 @@ import { getBiome } from "./biome.js"
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder"
 import { setWaterID } from "./world/water.js"
 import { updateWater } from "./world/water.js"
+import { getPigs, damagePig } from "./world/animals.js"
 
 // =======================
 //    СОЗДАЁМ ДВИЖОК
@@ -130,9 +131,64 @@ function setupInteraction(placeBlockID) {
     const canvas = noa.container.canvas
 
     noa.inputs.down.on("fire", () => {
+        // Сначала проверяем блоки (как обычно)
         if (noa.targetedBlock) {
             const p = noa.targetedBlock.position
             noa.setBlock(0, p[0], p[1], p[2])
+            return
+        }
+        
+        // Если нет targetedBlock, проверяем свиней в направлении взгляда
+        const playerPos = noa.entities.getPosition(noa.playerEntity)
+        if (!playerPos) return
+        
+        // Получаем направление взгляда игрока из камеры
+        const camera = noa.camera
+        const yaw = camera.heading
+        const pitch = camera.pitch
+        
+        // Вычисляем направление взгляда
+        const dirX = Math.cos(pitch) * Math.sin(yaw)
+        const dirY = -Math.sin(pitch)
+        const dirZ = Math.cos(pitch) * Math.cos(yaw)
+        
+        // Ищем ближайшую свинью в направлении взгляда (до 5 блоков)
+        const maxDistance = 5.0
+        let closestPig = null
+        let closestDistance = maxDistance
+        
+        const pigs = getPigs()
+        for (const pig of pigs) {
+            const pigPos = noa.entities.getPosition(pig.id)
+            if (!pigPos) continue
+            
+            // Вектор от игрока к свинье
+            const dx = pigPos[0] - playerPos[0]
+            const dy = pigPos[1] - playerPos[1]
+            const dz = pigPos[2] - playerPos[2]
+            const distance = Math.sqrt(dx * dx + dy * dy + dz * dz)
+            
+            if (distance > maxDistance) continue
+            
+            // Проверяем, находится ли свинья в направлении взгляда
+            // Нормализуем вектор к свинье
+            const normDx = dx / distance
+            const normDy = dy / distance
+            const normDz = dz / distance
+            
+            // Скалярное произведение для проверки угла (должно быть близко к 1)
+            const dot = dirX * normDx + dirY * normDy + dirZ * normDz
+            
+            // Если свинья в конусе взгляда (угол < 45 градусов, dot > 0.7)
+            if (dot > 0.7 && distance < closestDistance) {
+                closestDistance = distance
+                closestPig = pig
+            }
+        }
+        
+        // Если нашли свинью, наносим урон
+        if (closestPig) {
+            damagePig(noa, closestPig)
         }
     })
 
