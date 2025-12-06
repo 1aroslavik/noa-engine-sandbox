@@ -19,9 +19,13 @@ endif
 
 
 run-textures:
+ifeq ($(OS),Windows_NT)
 	powershell -ExecutionPolicy Bypass -Command ". .venv/Scripts/Activate.ps1; cd src/hello-world/vae; python -m uvicorn server:app --reload --port 3001"
-
-
+else
+	CWD=$$(pwd); \
+	cd src/hello-world/vae && \
+	$$CWD/.venv/bin/python3 -m uvicorn server:app --reload --port 3001
+endif
 
 start:
 	npm start
