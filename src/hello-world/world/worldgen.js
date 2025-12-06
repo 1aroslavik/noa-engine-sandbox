@@ -10,6 +10,7 @@ import {
 } from "../biome.js";
 
 import { generateTreesInChunk } from "./trees.js";
+import { generateAnimalsInChunk } from "./animals.js";
 
 import { createNoise2D } from "simplex-noise";
 const localDetail = createNoise2D(() => Math.random());
@@ -258,6 +259,9 @@ export function registerWorldGeneration(noa, ids) {
 
         noa.world.setChunkData(id, data);
 
-        if (y === 0) generateTreesInChunk(noa, ids, x, y, z);
+        if (y === 0) {
+            generateTreesInChunk(noa, ids, x, y, z);
+            generateAnimalsInChunk(noa, ids, x, y, z);
+        }
     });
 }
