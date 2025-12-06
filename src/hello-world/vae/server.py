@@ -59,6 +59,8 @@ def generate_all():
     # создаём переход: трава → земля
     if "grass_top" in res and "dirt" in res:
         res["grass_side"] = mix_vertical(res["grass_top"], res["dirt"])
+    if "snow_top" in res and "dirt" in res:
+        res["snow_transition_side"] = mix_vertical(res["snow_top"], res["dirt"])
 
     return res
 

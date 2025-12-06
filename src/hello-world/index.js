@@ -5,6 +5,7 @@ import { registerWorldGeneration, getHeightAt } from "./world/worldgen.js"
 import { getBiome } from "./biome.js"
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder"
 import { setWaterID } from "./world/water.js"
+import { updateWater } from "./world/water.js"
 
 // =======================
 //    СОЗДАЁМ ДВИЖОК
@@ -148,11 +149,15 @@ function setupInteraction(placeBlockID) {
     })
 }
 
-// =======================
-//   БИОМЫ В РЕЖИМЕ REALTIME
-// =======================
+
 let lastBiome = null
+
 noa.on("tick", () => {
+
+    // обновление воды
+    updateWater()
+
+    // вывод биома (не ломаем твою логику)
     const p = noa.ents.getPosition(noa.playerEntity)
     const bx = Math.floor(p[0])
     const bz = Math.floor(p[2])
@@ -163,3 +168,5 @@ noa.on("tick", () => {
         lastBiome = biome
     }
 })
+
+
