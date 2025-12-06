@@ -117,11 +117,19 @@ export async function initMaterialsAndBlocks(noa) {
 // ------------------------------------------------------------
 // Материал для свиней
 // ------------------------------------------------------------
-export function createPigMaterial(noa) {
+export function createPigMaterial(noa, size = 'normal') {
     const material = noa.rendering.makeStandardMaterial()
-    // Розовый цвет: RGB(1, 0.2, 0.2)
-    material.diffuseColor = new Color3(1, 0.2, 0.2)
-    // Добавляем эмиссию, чтобы цвет был виден даже в тени
-    material.emissiveColor = new Color3(0.3, 0.06, 0.06)
+    
+    if (size === 'small') {
+        // Маленькие свиньи - более яркий розовый
+        // Увеличиваем красный компонент и эмиссию для более яркого вида
+        material.diffuseColor = new Color3(1, 0.3, 0.3) // Более яркий розовый
+        material.emissiveColor = new Color3(0.4, 0.12, 0.12) // Более яркая эмиссия
+    } else {
+        // Стандартные свиньи - обычный розовый
+        material.diffuseColor = new Color3(1, 0.2, 0.2)
+        material.emissiveColor = new Color3(0.3, 0.06, 0.06)
+    }
+    
     return material
 }

@@ -26,7 +26,9 @@ function getHeight(x, z) {
 // ------------------------------------------------------------
 // Создание меша свинки
 // ------------------------------------------------------------
-function buildPigMesh(scene, material) {
+function buildPigMesh(scene, material, size = 'normal') {
+    // Определяем масштаб в зависимости от размера
+    const scale = size === 'small' ? 1.2 : 2.0
 
     const body = BABYLON.MeshBuilder.CreateBox('pigBody', { width: 0.9, height: 0.6, depth: 1.2 }, scene)
     body.position.y = 0.3
@@ -47,7 +49,7 @@ function buildPigMesh(scene, material) {
     }
 
     const pig = BABYLON.Mesh.MergeMeshes([body, head, ...legs], true, true)
-    pig.scaling.set(2, 2, 2)
+    pig.scaling.set(scale, scale, scale)
     pig.material = material
 
     return pig
@@ -57,8 +59,16 @@ function buildPigMesh(scene, material) {
 // ------------------------------------------------------------
 // Создание сущности свинки
 // ------------------------------------------------------------
-export function createPig(noa, scene, x, z, y = null) {
+export function createPig(noa, scene, x, z, y = null, size = 'normal') {
     const groundY = y !== null ? y : getHeightAt(x, z)
+    
+    // Определяем параметры в зависимости от размера
+    const isSmall = size === 'small'
+    const width = isSmall ? 0.4 : 0.7
+    const height = isSmall ? 0.7 : 1.2
+    const baseSpeed = isSmall ? 0.35 : 0.2 // Маленькие свиньи быстрее
+    const speedVariation = isSmall ? 0.2 : 0.15
+    const offsetY = height / 2
     
     // Проверяем, что место для спавна свободно - проверяем несколько позиций
     const spawnX = Math.floor(x)
@@ -98,16 +108,16 @@ export function createPig(noa, scene, x, z, y = null) {
         return null
     }
     
-    const material = createPigMaterial(noa)
-    const mesh = buildPigMesh(scene, material)
+    const material = createPigMaterial(noa, size)
+    const mesh = buildPigMesh(scene, material, size)
     // Спавним точно на поверхности блока (finalY + 1) плюс небольшой отступ для высоты
-    const spawnY = finalY + 1 + 0.6 // 0.6 - это половина высоты свиньи (1.2 / 2)
+    const spawnY = finalY + 1 + offsetY
 
     const id = noa.entities.add([finalX + 0.5, spawnY, finalZ + 0.5])
 
     noa.entities.addComponent(id, noa.entities.names.physics, {
-        width: 0.7, // Еще уменьшил ширину для лучшей проходимости
-        height: 1.2,
+        width: width,
+        height: height,
         gravity: true,
         collideWithTerrain: true,
         collideWithEntities: false, // Отключил коллизии между свиньями, чтобы они не толкали друг друга
@@ -119,7 +129,7 @@ export function createPig(noa, scene, x, z, y = null) {
 
     noa.entities.addComponent(id, noa.entities.names.mesh, {
         mesh: mesh,
-        offset: [0, 0.6, 0] // смещение для правильного позиционирования меша
+        offset: [0, offsetY, 0] // смещение для правильного позиционирования меша
     })
 
     const body = noa.entities.getPhysicsBody(id)
@@ -131,12 +141,14 @@ export function createPig(noa, scene, x, z, y = null) {
         mesh,
         body,
         angle: Math.random() * Math.PI * 2,
-        speed: 0.2 + Math.random() * 0.15, // Еще больше увеличил скорость
+        speed: baseSpeed + Math.random() * speedVariation, // Скорость зависит от размера
         directionChangeTimer: 60 + Math.floor(Math.random() * 60), // Начинаем с небольшой задержки
         jumpCooldown: 0,
+        size: size, // Сохраняем размер для отладки
     })
 
-    console.log(`🐷 Pig spawned at ${x} ${spawnY} ${z}`)
+    const sizeEmoji = isSmall ? '🐽' : '🐷'
+    console.log(`${sizeEmoji} ${size} Pig spawned at ${x} ${spawnY} ${z}`)
     return id
 }
 
@@ -253,7 +265,11 @@ function registerTickHandler() {
                     0
         }
         
-        // Проверяем блоки на разных уровнях (свинья высотой 1.2)
+        // Определяем высоту свиньи из физического тела
+        const pigHeight = body.height || 1.2
+        const checkHeight = Math.ceil(pigHeight)
+        
+        // Проверяем блоки на разных уровнях (с учетом размера свиньи)
         // Проверяем не только центр, но и края для более точной проверки
         const stuckCheckPoints = [
             [groundX, groundZ], // Центр
@@ -267,11 +283,19 @@ function registerTickHandler() {
         for (const [cx, cz] of stuckCheckPoints) {
             const atFeet = currentNoa.getBlock(cx, groundY, cz)
             const atBody = currentNoa.getBlock(cx, groundY + 1, cz)
-            const atHead = currentNoa.getBlock(cx, groundY + 2, cz)
-            
-            if (atFeet !== 0 || atBody !== 0 || atHead !== 0) {
-                isStuck = true
-                break
+            // Проверяем только нужную высоту в зависимости от размера
+            if (checkHeight > 1) {
+                const atHead = currentNoa.getBlock(cx, groundY + 2, cz)
+                if (atFeet !== 0 || atBody !== 0 || atHead !== 0) {
+                    isStuck = true
+                    break
+                }
+            } else {
+                // Для маленьких свиней проверяем только до уровня тела
+                if (atFeet !== 0 || atBody !== 0) {
+                    isStuck = true
+                    break
+                }
             }
         }
         
@@ -283,6 +307,11 @@ function registerTickHandler() {
             let freeY = pos[1]
             let freeZ = pos[2]
             
+            // Получаем высоту свиньи из физического тела
+            const pigHeight = body.height || 1.2
+            const checkHeight = Math.ceil(pigHeight)
+            const offsetY = pigHeight / 2
+            
             for (let radius = 1; radius <= 4 && !foundFreeSpot; radius++) {
                 for (let dx = -radius; dx <= radius && !foundFreeSpot; dx++) {
                     for (let dz = -radius; dz <= radius && !foundFreeSpot; dz++) {
@@ -292,14 +321,20 @@ function registerTickHandler() {
                         
                         const blockAtFeet = currentNoa.getBlock(checkX, checkY, checkZ)
                         const blockAtBody = currentNoa.getBlock(checkX, checkY + 1, checkZ)
-                        const blockAtHead = currentNoa.getBlock(checkX, checkY + 2, checkZ)
                         const blockUnder = currentNoa.getBlock(checkX, checkY - 1, checkZ)
                         
+                        // Проверяем блоки в зависимости от размера свиньи
+                        let isFree = blockAtFeet === 0 && blockAtBody === 0 && blockUnder !== 0
+                        if (checkHeight > 1) {
+                            const blockAtHead = currentNoa.getBlock(checkX, checkY + 2, checkZ)
+                            isFree = isFree && blockAtHead === 0
+                        }
+                        
                         // Если место свободно и есть блок под ногами
-                        if (blockAtFeet === 0 && blockAtBody === 0 && blockAtHead === 0 && blockUnder !== 0) {
+                        if (isFree) {
                             foundFreeSpot = true
                             freeX = checkX + 0.5
-                            freeY = checkY + 1 + 0.6
+                            freeY = checkY + 1 + offsetY
                             freeZ = checkZ + 0.5
                         }
                     }
@@ -439,7 +474,9 @@ export function generateAnimalsInChunk(noa, ids, x0, y0, z0) {
         // Спавним свинок только в подходящих биомах
         if (biome === "plains" || biome === "forest") {
             if (Math.random() < 0.3) { // 30% шанс спавна
-                createPig(noa, scene, x, z, y)
+                // Случайно выбираем размер: 50% маленькие, 50% стандартные
+                const size = Math.random() < 0.5 ? 'small' : 'normal'
+                createPig(noa, scene, x, z, y, size)
             }
         }
     }
