@@ -23,7 +23,7 @@ export function updateWater() {
     const noa = getNoa()
     if (!noa) return
 
-    const p = noa.ents.getPosition(noa.playerEntity)
+    const p = noa.entities.getPosition(noa.playerEntity)
     const bx = Math.floor(p[0])
     const by = Math.floor(p[1])
     const bz = Math.floor(p[2])

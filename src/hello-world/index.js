@@ -19,6 +19,7 @@ const noa = new Engine({
     playerStart: [0, 200, 0],
 })
 
+// @ts-ignore
 window.noa = noa
 
 // =======================
@@ -151,14 +152,26 @@ function setupInteraction(placeBlockID) {
 
 
 let lastBiome = null
+let lastPlayerPos = null
 
 noa.on("tick", () => {
 
     // обновление воды
     updateWater()
 
+    // вывод координат игрока при движении
+    const p = noa.entities.getPosition(noa.playerEntity)
+    
+    // Проверяем, изменилась ли позиция (с небольшой погрешностью)
+    if (!lastPlayerPos || 
+        Math.abs(p[0] - lastPlayerPos[0]) > 0.1 || 
+        Math.abs(p[1] - lastPlayerPos[1]) > 0.1 || 
+        Math.abs(p[2] - lastPlayerPos[2]) > 0.1) {
+        //console.log(`📍 Игрок: x=${p[0].toFixed(2)}, y=${p[1].toFixed(2)}, z=${p[2].toFixed(2)}`)
+        lastPlayerPos = [...p]
+    }
+
     // вывод биома (не ломаем твою логику)
-    const p = noa.ents.getPosition(noa.playerEntity)
     const bx = Math.floor(p[0])
     const bz = Math.floor(p[2])
 
