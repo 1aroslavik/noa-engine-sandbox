@@ -22,6 +22,10 @@ const noa = new Engine({
     playerStart: [0, 200, 0],
 })
 
+// Отключаем дефолтную привязку E к alt-fire, если она есть
+// Привязываем alt-fire только к R
+noa.inputs.bind("alt-fire", "KeyR")
+
 // @ts-ignore
 window.noa = noa
 
@@ -266,14 +270,89 @@ function setupInteraction(placeBlockID, blocksMap, waterID) {
         }
     })
 
+    // Маппинг предметов на блоки для размещения
+    const itemToBlockMap = {
+        'biome_block_plains': blocksMap['grass'] || blocksMap['grass_top'] || null,
+        'biome_block_tundra': blocksMap['tundra_grass'] || blocksMap['tundra_grass_top'] || null,
+        'biome_block_desert': blocksMap['grass_dry'] || blocksMap['grass_dry_top'] || null,
+        'biome_block_mountain': blocksMap['grass'] || blocksMap['grass_top'] || null,
+        'biome_block_hybrid': blocksMap['grass'] || blocksMap['grass_top'] || null,
+        // Можно размещать и обычную землю
+        'dirt_plains': blocksMap['dirt'] || null,
+        'dirt_tundra': blocksMap['dirt'] || null,
+        'dirt_desert': blocksMap['dirt'] || null,
+        'dirt_mountain': blocksMap['dirt'] || null,
+        'dirt': blocksMap['dirt'] || null,
+        'stone': blocksMap['stone'] || null,
+        'sand': blocksMap['sand'] || null,
+        'log': blocksMap['log'] || null,
+        'planks': blocksMap['log'] || null, // Планки размещаем как бревна (или можно создать отдельный блок)
+        'stick': null, // Палки нельзя размещать
+        'meat': null, // Мясо нельзя размещать
+        'gravel': blocksMap['gravel'] || null,
+        'andesite': blocksMap['andesite'] || null,
+        'granite': blocksMap['granite'] || null,
+    }
+    
+    // Функция для получения блока по имени предмета
+    function getBlockForItem(itemName) {
+        // Сначала проверяем маппинг
+        if (itemToBlockMap[itemName] !== undefined) {
+            return itemToBlockMap[itemName]
+        }
+        
+        // Если предмет - сгенерированный (org_, min_, syn_), не размещаем
+        if (itemName.startsWith('org_') || itemName.startsWith('min_') || itemName.startsWith('syn_')) {
+            return null
+        }
+        
+        // Пытаемся найти блок с таким же именем
+        if (blocksMap[itemName]) {
+            return blocksMap[itemName]
+        }
+        
+        // Если ничего не найдено, возвращаем null
+        return null
+    }
+    
+    // E обрабатывается в crafting.js для открытия окна крафта
+    // alt-fire привязан только к R, поэтому E не будет использоваться для размещения блоков
     noa.inputs.down.on("alt-fire", () => {
         if (noa.targetedBlock) {
             const p = noa.targetedBlock.adjacent
-            noa.setBlock(placeBlockID, p[0], p[1], p[2])
+            
+            // Получаем выбранный предмет из инвентаря
+            // @ts-ignore
+            const selectedItem = window.getSelectedItem ? window.getSelectedItem() : null
+            
+            // Размещаем ТОЛЬКО если есть выбранный предмет
+            if (!selectedItem || !selectedItem.name) {
+                return // Не размещаем ничего, если нет выбранного предмета
+            }
+            
+            // Получаем блок для этого предмета
+            const blockToPlace = getBlockForItem(selectedItem.name)
+            
+            if (!blockToPlace) {
+                return // Не размещаем, если блок не найден
+            }
+            
+            // Размещаем блок
+            noa.setBlock(blockToPlace, p[0], p[1], p[2])
+            
+            // Уменьшаем количество предмета в инвентаре
+            // @ts-ignore
+            if (window.removeItem && window.getSelectedSlot) {
+                // @ts-ignore
+                const slotIndex = window.getSelectedSlot()
+                // @ts-ignore
+                window.removeItem(slotIndex, 1)
+            }
         }
     })
 
-    // Используем другую клавишу для ставки блоков, так как E используется для крафта
+    // Используем R для ставки блоков, так как E используется для крафта
+    // Привязываем alt-fire только к R
     noa.inputs.bind("alt-fire", "KeyR")
 
     canvas.addEventListener("click", () => {

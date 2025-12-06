@@ -27,27 +27,15 @@ export function setupPlayer(grassID) {
     // ================================
     // 2. ЛОМАНИЕ БЛОКОВ
     // ================================
-    noa.inputs.down.on("fire", () => {
-        const hit = noa.targetedBlock
-        if (!hit) return
-
-        const p = hit.position
-        noa.setBlock(0, p[0], p[1], p[2])
-    })
+    // Удалено - ломание блоков теперь обрабатывается в index.js
+    // noa.inputs.down.on("fire", () => { ... })
 
 
     // ================================
     // 3. СТАВКА БЛОКОВ
     // ================================
-    noa.inputs.down.on("alt-fire", () => {
-        const hit = noa.targetedBlock
-        if (!hit) return
-
-        const p = hit.adjacent
-        noa.setBlock(grassID, p[0], p[1], p[2])
-    })
-
-    noa.inputs.bind("alt-fire", "KeyE")
+    // Удалено - размещение блоков теперь обрабатывается в index.js через KeyR
+    // Эта функция больше не используется, логика размещения блоков в setupInteraction()
 
 
     // ================================

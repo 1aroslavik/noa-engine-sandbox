@@ -108,6 +108,43 @@ export const ITEM_DEFINITIONS = {
     craftDifficulty: CRAFT_DIFFICULTY.TRIVIAL,
     description: 'Земля гор'
   },
+  
+  // Блоки биомов для размещения
+  'biome_block_plains': {
+    name: 'biome_block_plains',
+    rarity: RARITY.UNCOMMON,
+    type: MATERIAL_TYPE.MINERAL,
+    craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: 'Блок биома равнин'
+  },
+  'biome_block_tundra': {
+    name: 'biome_block_tundra',
+    rarity: RARITY.UNCOMMON,
+    type: MATERIAL_TYPE.MINERAL,
+    craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: 'Блок биома тундры'
+  },
+  'biome_block_desert': {
+    name: 'biome_block_desert',
+    rarity: RARITY.UNCOMMON,
+    type: MATERIAL_TYPE.MINERAL,
+    craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: 'Блок биома пустыни'
+  },
+  'biome_block_mountain': {
+    name: 'biome_block_mountain',
+    rarity: RARITY.UNCOMMON,
+    type: MATERIAL_TYPE.MINERAL,
+    craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: 'Блок биома гор'
+  },
+  'biome_block_hybrid': {
+    name: 'biome_block_hybrid',
+    rarity: RARITY.RARE,
+    type: MATERIAL_TYPE.MINERAL,
+    craftDifficulty: CRAFT_DIFFICULTY.MEDIUM,
+    description: 'Гибридный блок биома'
+  },
   'sand': {
     name: 'sand',
     rarity: RARITY.COMMON,
@@ -154,15 +191,66 @@ export const ITEM_DEFINITIONS = {
   }
 }
 
+// Динамически созданные определения предметов (для сгенерированных рецептов)
+const dynamicDefinitions = new Map()
+
 // Получить метаданные предмета
 export function getItemDefinition(itemName) {
-  return ITEM_DEFINITIONS[itemName] || {
+  // Сначала проверяем статические определения
+  if (ITEM_DEFINITIONS[itemName]) {
+    return ITEM_DEFINITIONS[itemName]
+  }
+  
+  // Затем проверяем динамические
+  if (dynamicDefinitions.has(itemName)) {
+    return dynamicDefinitions.get(itemName)
+  }
+  
+  // Если предмет сгенерирован (начинается с org_, min_, syn_), парсим его
+  if (itemName.startsWith('org_') || itemName.startsWith('min_') || itemName.startsWith('syn_')) {
+    const parts = itemName.split('_')
+    if (parts.length >= 3) {
+      const type = parts[0] === 'org' ? MATERIAL_TYPE.ORGANIC :
+                   parts[0] === 'min' ? MATERIAL_TYPE.MINERAL : MATERIAL_TYPE.SYNTHETIC
+      const rarityStr = parts[parts.length - 1]
+      const rarity = rarityStr === 'common' ? RARITY.COMMON :
+                     rarityStr === 'uncommon' ? RARITY.UNCOMMON :
+                     rarityStr === 'rare' ? RARITY.RARE :
+                     rarityStr === 'epic' ? RARITY.EPIC : RARITY.LEGENDARY
+      
+      const baseName = parts.slice(1, -1).join('_')
+      const def = {
+        name: itemName,
+        rarity: rarity,
+        type: type,
+        craftDifficulty: getDifficultyFromRarity(rarity),
+        description: `Созданный ${getMaterialTypeName(type).toLowerCase()} материал (${getRarityName(rarity).toLowerCase()})`
+      }
+      dynamicDefinitions.set(itemName, def)
+      return def
+    }
+  }
+  
+  // Дефолтное определение
+  return {
     name: itemName,
     rarity: RARITY.COMMON,
     type: MATERIAL_TYPE.ORGANIC,
     craftDifficulty: CRAFT_DIFFICULTY.TRIVIAL,
     description: itemName
   }
+}
+
+// Получить сложность крафта на основе редкости (для динамических предметов)
+function getDifficultyFromRarity(rarity) {
+  const rarityToDifficulty = {
+    [RARITY.COMMON]: CRAFT_DIFFICULTY.EASY,
+    [RARITY.UNCOMMON]: CRAFT_DIFFICULTY.NORMAL,
+    [RARITY.RARE]: CRAFT_DIFFICULTY.MEDIUM,
+    [RARITY.EPIC]: CRAFT_DIFFICULTY.HARD,
+    [RARITY.LEGENDARY]: CRAFT_DIFFICULTY.EXPERT
+  }
+  return rarityToDifficulty[rarity] || CRAFT_DIFFICULTY.NORMAL
 }
 
 // Получить цвет редкости
@@ -211,6 +299,21 @@ export function getRarityName(rarity) {
 
 // Сократить название предмета для отображения в UI
 export function getShortName(itemName) {
+  // Если это сгенерированный предмет (org_, min_, syn_), создаем короткое имя
+  if (itemName.startsWith('org_') || itemName.startsWith('min_') || itemName.startsWith('syn_')) {
+    const parts = itemName.split('_')
+    if (parts.length >= 3) {
+      const typePrefix = parts[0] === 'org' ? 'Org' : parts[0] === 'min' ? 'Min' : 'Syn'
+      const base = parts.slice(1, -1).join('_')
+      const rarity = parts[parts.length - 1]
+      const rarityShort = rarity === 'common' ? 'C' :
+                         rarity === 'uncommon' ? 'U' :
+                         rarity === 'rare' ? 'R' :
+                         rarity === 'epic' ? 'E' : 'L'
+      return `${typePrefix}_${base.substring(0, 4)}_${rarityShort}`
+    }
+  }
+  
   // Маппинг полных названий на короткие версии
   const shortNames = {
     'iron_ingot': 'Iron',
@@ -242,7 +345,13 @@ export function getShortName(itemName) {
     'dirt_plains': 'DirtP',
     'dirt_tundra': 'DirtT',
     'dirt_desert': 'DirtD',
-    'dirt_mountain': 'DirtM'
+    'dirt_mountain': 'DirtM',
+    // Блоки биомов
+    'biome_block_plains': 'BiomeP',
+    'biome_block_tundra': 'BiomeT',
+    'biome_block_desert': 'BiomeD',
+    'biome_block_mountain': 'BiomeM',
+    'biome_block_hybrid': 'BiomeH'
   }
   
   // Если есть короткое название, используем его

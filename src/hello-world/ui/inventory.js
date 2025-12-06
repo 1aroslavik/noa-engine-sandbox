@@ -163,6 +163,14 @@ export function getSelectedItem() {
   return inventory[selectedSlot]
 }
 
+// Экспортируем функции в window для доступа из других модулей
+// @ts-ignore
+window.getSelectedItem = getSelectedItem
+// @ts-ignore
+window.getSelectedSlot = getSelectedSlot
+// @ts-ignore
+window.removeItem = removeItem
+
 window.addEventListener('wheel', e => {
   setSelected(selectedSlot + (e.deltaY > 0 ? 1 : -1))
 })

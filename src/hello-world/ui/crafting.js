@@ -1,13 +1,10 @@
 // ui/crafting.js — окно крафтинга 2x2
 
 import { inventory, addItem, getSelectedItem, removeItem, getSelectedSlot } from './inventory.js'
-import { getItemDefinition, getRarityColor, getDifficultyName, getMaterialTypeName, getRarityName, CRAFT_DIFFICULTY, getShortName } from './items.js'
+import { getItemDefinition, getRarityColor, getDifficultyName, getMaterialTypeName, getRarityName, CRAFT_DIFFICULTY, getShortName, RARITY, MATERIAL_TYPE } from './items.js'
 
-// === РЕЦЕПТЫ КРАФТА ===
-// pattern — массив 2x2
-// null означает пустую ячейку
-// difficulty — сложность крафта (1-10)
-export const recipes = [
+// === БАЗОВЫЕ РЕЦЕПТЫ (статические, всегда доступные) ===
+const baseRecipes = [
   {
     pattern: [
       ["log", null],
@@ -27,6 +24,203 @@ export const recipes = [
     description: "Изготовление палок из досок"
   }
 ]
+
+// === ДИНАМИЧЕСКИ ГЕНЕРИРУЕМЫЕ РЕЦЕПТЫ ===
+let generatedRecipes = []
+export let recipes = [...baseRecipes, ...generatedRecipes]
+
+// === ГЕНЕРАЦИЯ РЕЦЕПТОВ НА ОСНОВЕ ИНВЕНТАРЯ ===
+function generateRecipes() {
+  generatedRecipes = []
+  
+  // Получаем уникальные предметы из инвентаря
+  const availableItems = []
+  const itemCounts = new Map()
+  
+  for (let i = 0; i < inventory.length; i++) {
+    const item = inventory[i]
+    if (item && item.count > 0) {
+      if (!itemCounts.has(item.name)) {
+        availableItems.push(item.name)
+        itemCounts.set(item.name, item.count)
+      }
+    }
+  }
+  
+  if (availableItems.length === 0) {
+    recipes = [...baseRecipes]
+    return
+  }
+  
+  // Генерируем 5-10 рецептов
+  const targetRecipeCount = Math.min(10, Math.max(5, availableItems.length * 2))
+  const generated = new Set() // Для избежания дубликатов
+  
+  // Правило 1: 2 одинаковых предмета = улучшенная версия (следующая редкость)
+  for (const itemName of availableItems) {
+    if (itemCounts.get(itemName) >= 2 && generated.size < targetRecipeCount) {
+      const itemDef = getItemDefinition(itemName)
+      const nextRarity = getNextRarity(itemDef.rarity)
+      const resultName = generateResultName(itemName, itemDef.type, nextRarity)
+      
+      if (!generated.has(`${itemName}+${itemName}`)) {
+        generatedRecipes.push({
+          pattern: [
+            [itemName, null],
+            [null, null]
+          ],
+          result: { name: resultName, count: 1 },
+          difficulty: getDifficultyFromRarity(nextRarity),
+          description: `Улучшение ${itemDef.description}`
+        })
+        generated.add(`${itemName}+${itemName}`)
+      }
+    }
+  }
+  
+  // Правило 2: 2 разных предмета одной редкости и типа = предмет следующей редкости
+  for (let i = 0; i < availableItems.length && generated.size < targetRecipeCount; i++) {
+    for (let j = i + 1; j < availableItems.length && generated.size < targetRecipeCount; j++) {
+      const item1 = availableItems[i]
+      const item2 = availableItems[j]
+      const def1 = getItemDefinition(item1)
+      const def2 = getItemDefinition(item2)
+      
+      if (def1.rarity === def2.rarity && def1.type === def2.type && 
+          itemCounts.get(item1) >= 1 && itemCounts.get(item2) >= 1) {
+        const nextRarity = getNextRarity(def1.rarity)
+        const resultName = generateResultName(`${item1}_${item2}`, def1.type, nextRarity)
+        
+        if (!generated.has(`${item1}+${item2}`) && !generated.has(`${item2}+${item1}`)) {
+          generatedRecipes.push({
+            pattern: [
+              [item1, item2],
+              [null, null]
+            ],
+            result: { name: resultName, count: 1 },
+            difficulty: getDifficultyFromRarity(nextRarity),
+            description: `Комбинация ${def1.description} и ${def2.description}`
+          })
+          generated.add(`${item1}+${item2}`)
+        }
+      }
+    }
+  }
+  
+  // Правило 3: 2 разных предмета разных типов = синтетический предмет
+  for (let i = 0; i < availableItems.length && generated.size < targetRecipeCount; i++) {
+    for (let j = i + 1; j < availableItems.length && generated.size < targetRecipeCount; j++) {
+      const item1 = availableItems[i]
+      const item2 = availableItems[j]
+      const def1 = getItemDefinition(item1)
+      const def2 = getItemDefinition(item2)
+      
+      if (def1.type !== def2.type && 
+          def1.rarity === def2.rarity &&
+          itemCounts.get(item1) >= 1 && itemCounts.get(item2) >= 1) {
+        const resultName = generateResultName(`${item1}_${item2}`, MATERIAL_TYPE.SYNTHETIC, def1.rarity)
+        
+        if (!generated.has(`${item1}+${item2}_synth`) && !generated.has(`${item2}+${item1}_synth`)) {
+          generatedRecipes.push({
+            pattern: [
+              [item1, item2],
+              [null, null]
+            ],
+            result: { name: resultName, count: 1 },
+            difficulty: getDifficultyFromRarity(def1.rarity) + 1,
+            description: `Синтез ${def1.description} и ${def2.description}`
+          })
+          generated.add(`${item1}+${item2}_synth`)
+        }
+      }
+    }
+  }
+  
+  // Правило 4: 3 предмета одной редкости = более редкий предмет
+  for (let i = 0; i < availableItems.length && generated.size < targetRecipeCount; i++) {
+    for (let j = i + 1; j < availableItems.length && generated.size < targetRecipeCount; j++) {
+      for (let k = j + 1; k < availableItems.length && generated.size < targetRecipeCount; k++) {
+        const item1 = availableItems[i]
+        const item2 = availableItems[j]
+        const item3 = availableItems[k]
+        const def1 = getItemDefinition(item1)
+        const def2 = getItemDefinition(item2)
+        const def3 = getItemDefinition(item3)
+        
+        if (def1.rarity === def2.rarity && def2.rarity === def3.rarity &&
+            itemCounts.get(item1) >= 1 && itemCounts.get(item2) >= 1 && itemCounts.get(item3) >= 1) {
+          const nextRarity = getNextRarity(def1.rarity)
+          const resultName = generateResultName(`${item1}_${item2}_${item3}`, def1.type, nextRarity)
+          const key = `${item1}+${item2}+${item3}`
+          
+          if (!generated.has(key)) {
+            generatedRecipes.push({
+              pattern: [
+                [item1, item2],
+                [item3, null]
+              ],
+              result: { name: resultName, count: 1 },
+              difficulty: getDifficultyFromRarity(nextRarity) + 1,
+              description: `Сложная комбинация трех материалов`
+            })
+            generated.add(key)
+          }
+        }
+      }
+    }
+  }
+  
+  // Обновляем общий список рецептов
+  recipes = [...baseRecipes, ...generatedRecipes]
+  console.log(`🔨 Сгенерировано ${generatedRecipes.length} рецептов из ${availableItems.length} доступных предметов`)
+}
+
+// Получить следующую редкость
+function getNextRarity(currentRarity) {
+  const rarityOrder = [RARITY.COMMON, RARITY.UNCOMMON, RARITY.RARE, RARITY.EPIC, RARITY.LEGENDARY]
+  const currentIndex = rarityOrder.indexOf(currentRarity)
+  if (currentIndex < rarityOrder.length - 1) {
+    return rarityOrder[currentIndex + 1]
+  }
+  return currentRarity // Если уже максимальная редкость, возвращаем её
+}
+
+// Получить сложность крафта на основе редкости
+function getDifficultyFromRarity(rarity) {
+  const rarityToDifficulty = {
+    [RARITY.COMMON]: CRAFT_DIFFICULTY.EASY,
+    [RARITY.UNCOMMON]: CRAFT_DIFFICULTY.NORMAL,
+    [RARITY.RARE]: CRAFT_DIFFICULTY.MEDIUM,
+    [RARITY.EPIC]: CRAFT_DIFFICULTY.HARD,
+    [RARITY.LEGENDARY]: CRAFT_DIFFICULTY.EXPERT
+  }
+  return rarityToDifficulty[rarity] || CRAFT_DIFFICULTY.NORMAL
+}
+
+// Генерировать имя результата на основе входных данных
+function generateResultName(baseName, type, rarity) {
+  // Создаем уникальное имя на основе типа и редкости
+  const typePrefix = type === MATERIAL_TYPE.ORGANIC ? 'org' : 
+                     type === MATERIAL_TYPE.MINERAL ? 'min' : 'syn'
+  const raritySuffix = rarity === RARITY.COMMON ? 'common' :
+                       rarity === RARITY.UNCOMMON ? 'uncommon' :
+                       rarity === RARITY.RARE ? 'rare' :
+                       rarity === RARITY.EPIC ? 'epic' : 'legendary'
+  
+  // Упрощаем базовое имя (берем первую часть до _ или первые 8 символов)
+  let base = baseName.split('_')[0] || baseName
+  if (base.length > 8) {
+    base = base.substring(0, 8)
+  }
+  
+  // Если baseName содержит несколько частей через _, берем первые две
+  const parts = baseName.split('_')
+  if (parts.length > 1 && parts.length <= 3) {
+    base = parts.slice(0, 2).join('_')
+  }
+  
+  return `${typePrefix}_${base}_${raritySuffix}`
+}
 
 
 // === UI ЭЛЕМЕНТЫ ===
@@ -226,19 +420,32 @@ function getGridPattern() {
 // === ПОИСК РЕЦЕПТА ===
 function matchRecipe() {
   const pattern = getGridPattern()
+  
+  // Отладочный вывод
+  console.log('🔍 Проверка рецепта. Паттерн:', pattern)
 
   for (const rec of recipes) {
     let ok = true
 
     for (let y = 0; y < 2; y++) {
       for (let x = 0; x < 2; x++) {
-        if (rec.pattern[y][x] !== pattern[y][x]) ok = false
+        const recipeItem = rec.pattern[y][x]
+        const gridItem = pattern[y][x]
+        if (recipeItem !== gridItem) {
+          ok = false
+          break
+        }
       }
+      if (!ok) break
     }
 
-    if (ok) return rec
+    if (ok) {
+      console.log('✅ Найден рецепт:', rec.result.name)
+      return rec
+    }
   }
 
+  console.log('❌ Рецепт не найден')
   return null
 }
 
@@ -278,43 +485,53 @@ function updateCrafting() {
 }
 
 
-// === ПОВЕДЕНИЕ ПРИ КЛИКЕ НА ЯЧЕЙКУ GRID ===
-grid.forEach(cell => {
-  cell.onclick = () => {
-    const selected = getSelectedItem()
-    if (!selected) return
-    cell.dataset.item = selected.name
-    cell.textContent = getShortName(selected.name)
-    updateCrafting()
-  }
-})
+// Удаляем дублирующий обработчик - он уже есть в цикле создания ячеек выше
+// Этот обработчик конфликтует с обработчиком в строке 245
 
 
 // === КЛИК ПО РЕЗУЛЬТАТУ — КРАФТ ===
 resultSlot.onclick = () => {
-  if (!resultSlot.dataset.result) return
+  if (!resultSlot.dataset.result) {
+    console.log('❌ Нет результата для крафта')
+    return
+  }
 
-  const { name, count } = JSON.parse(resultSlot.dataset.result)
+  try {
+    const { name, count } = JSON.parse(resultSlot.dataset.result)
+    console.log('🔨 Крафт предмета:', name, 'x', count)
 
-  // добавляем в инвентарь
-  addItem(name, count)
+    // добавляем в инвентарь
+    const added = addItem(name, count)
+    if (!added) {
+      console.warn('⚠ Не удалось добавить предмет в инвентарь (инвентарь полон?)')
+      return
+    }
 
-  // очищаем сетку
-  grid.forEach(c => {
-    c.dataset.item = null
-    c.textContent = ""
-  })
+    // очищаем сетку
+    grid.forEach(c => {
+      c.dataset.item = null
+      c.textContent = ""
+      c.style.border = "2px solid gray"
+    })
 
-  updateCrafting()
+    updateCrafting()
+    console.log('✅ Крафт завершен')
+  } catch (err) {
+    console.error('❌ Ошибка при крафте:', err)
+  }
 }
 
 
 // === ОТКРЫТИЕ/ЗАКРЫТИЕ ИНТЕРФЕЙСА ===
-window.addEventListener("keydown", e => {
+// Используем capture phase, чтобы перехватить E до других обработчиков
+document.addEventListener("keydown", e => {
   // Открываем крафт по E
   if (e.code === "KeyE" && !e.shiftKey && !e.ctrlKey && !e.altKey) {
     e.preventDefault()
     e.stopPropagation()
+    e.stopImmediatePropagation() // Предотвращаем обработку E в noa
+    
+    console.log("🔧 E нажата - открываем/закрываем крафт")
     
     // @ts-ignore
     const noa = window.noa
@@ -323,6 +540,11 @@ window.addEventListener("keydown", e => {
     if (isOpening) {
       // Открываем окно крафта
       craftDiv.style.display = "flex"
+      console.log("✅ Окно крафта открыто")
+      // Генерируем рецепты на основе текущего инвентаря
+      generateRecipes()
+      // Обновляем крафт при открытии
+      updateCrafting()
       // Отключаем pointer lock, чтобы курсор был виден для перетаскивания
       if (noa && noa.container && noa.container.canvas) {
         document.exitPointerLock()
@@ -331,6 +553,7 @@ window.addEventListener("keydown", e => {
     } else {
       // Закрываем окно крафта
       craftDiv.style.display = "none"
+      console.log("❌ Окно крафта закрыто")
       // Включаем pointer lock обратно для управления камерой
       if (noa && noa.container && noa.container.canvas) {
         noa.container.canvas.requestPointerLock()
@@ -338,4 +561,4 @@ window.addEventListener("keydown", e => {
       }
     }
   }
-})
+}, true) // Используем capture phase для раннего перехвата
