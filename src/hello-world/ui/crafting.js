@@ -1,24 +1,30 @@
 // ui/crafting.js — окно крафтинга 2x2
 
 import { inventory, addItem, getSelectedItem, removeItem, getSelectedSlot } from './inventory.js'
+import { getItemDefinition, getRarityColor, getDifficultyName, getMaterialTypeName, getRarityName, CRAFT_DIFFICULTY, getShortName } from './items.js'
 
 // === РЕЦЕПТЫ КРАФТА ===
 // pattern — массив 2x2
 // null означает пустую ячейку
+// difficulty — сложность крафта (1-10)
 export const recipes = [
   {
     pattern: [
-      ["wood", null],
+      ["log", null],
       [null, null]
     ],
-    result: { name: "planks", count: 4 }
+    result: { name: "planks", count: 4 },
+    difficulty: CRAFT_DIFFICULTY.EASY,
+    description: "Распил бревна на доски"
   },
   {
     pattern: [
       ["planks", null],
       ["planks", null]
     ],
-    result: { name: "stick", count: 4 }
+    result: { name: "stick", count: 4 },
+    difficulty: CRAFT_DIFFICULTY.EASY,
+    description: "Изготовление палок из досок"
   }
 ]
 
@@ -52,7 +58,13 @@ for (let i = 0; i < 4; i++) {
   cell.style.alignItems = "center"
   cell.style.justifyContent = "center"
   cell.style.color = "#fff"
-  cell.style.font = "13px monospace"
+  cell.style.font = "10px monospace"
+  cell.style.fontSize = "10px"
+  cell.style.lineHeight = "1.0"
+  cell.style.textAlign = "center"
+  cell.style.overflow = "hidden"
+  cell.style.textOverflow = "ellipsis"
+  cell.style.whiteSpace = "nowrap"
   cell.style.cursor = "pointer"
   cell.dataset.item = null
   cell.dataset.gridIndex = String(i)
@@ -74,7 +86,14 @@ for (let i = 0; i < 4; i++) {
   cell.addEventListener('dragleave', (e) => {
     e.preventDefault()
     e.stopPropagation()
-    cell.style.border = "2px solid gray"
+    // Возвращаем цвет границы в зависимости от редкости предмета в ячейке
+    if (cell.dataset.item) {
+      const itemDef = getItemDefinition(cell.dataset.item)
+      const rarityColor = getRarityColor(itemDef.rarity)
+      cell.style.border = `2px solid ${rarityColor}`
+    } else {
+      cell.style.border = "2px solid gray"
+    }
     cell.style.background = "#111"
   })
   
@@ -82,7 +101,6 @@ for (let i = 0; i < 4; i++) {
   cell.addEventListener('drop', (e) => {
     e.preventDefault()
     e.stopPropagation()
-    cell.style.border = "2px solid gray"
     cell.style.background = "#111"
     
     try {
@@ -113,7 +131,13 @@ for (let i = 0; i < 4; i++) {
         if (removeItem(data.slotIndex, 1)) {
           // Добавляем предмет в ячейку крафта
           cell.dataset.item = data.item.name
-          cell.textContent = data.item.name
+          cell.textContent = getShortName(data.item.name)
+          
+          // Обновляем цвет границы в зависимости от редкости
+          const itemDef = getItemDefinition(data.item.name)
+          const rarityColor = getRarityColor(itemDef.rarity)
+          cell.style.border = `2px solid ${rarityColor}`
+          
           updateCrafting()
           console.log('Предмет добавлен в ячейку:', data.item.name)
         } else {
@@ -144,7 +168,13 @@ for (let i = 0; i < 4; i++) {
       const slotIndex = getSelectedSlot()
       if (removeItem(slotIndex, 1)) {
         cell.dataset.item = selected.name
-        cell.textContent = selected.name
+        cell.textContent = getShortName(selected.name)
+        
+        // Обновляем цвет границы в зависимости от редкости
+        const itemDef = getItemDefinition(selected.name)
+        const rarityColor = getRarityColor(itemDef.rarity)
+        cell.style.border = `2px solid ${rarityColor}`
+        
         updateCrafting()
       }
     } else if (cell.dataset.item) {
@@ -153,6 +183,7 @@ for (let i = 0; i < 4; i++) {
       addItem(itemName, 1)
       cell.dataset.item = null
       cell.textContent = ""
+      cell.style.border = "2px solid gray" // Возвращаем стандартный цвет
       updateCrafting()
     }
   })
@@ -172,7 +203,13 @@ resultSlot.style.color = "#fff"
 resultSlot.style.display = "flex"
 resultSlot.style.alignItems = "center"
 resultSlot.style.justifyContent = "center"
-resultSlot.style.font = "13px monospace"
+resultSlot.style.font = "10px monospace"
+resultSlot.style.fontSize = "10px"
+resultSlot.style.lineHeight = "1.0"
+resultSlot.style.textAlign = "center"
+resultSlot.style.overflow = "hidden"
+resultSlot.style.textOverflow = "ellipsis"
+resultSlot.style.whiteSpace = "nowrap"
 craftDiv.appendChild(resultSlot)
 
 
@@ -211,11 +248,32 @@ function updateCrafting() {
   const rec = matchRecipe()
 
   if (rec) {
-    resultSlot.textContent = rec.result.name + " x" + rec.result.count
+    const resultName = rec.result.name
+    const resultCount = rec.result.count
+    resultSlot.textContent = getShortName(resultName) + " x" + resultCount
     resultSlot.dataset.result = JSON.stringify(rec.result)
+    
+    // Получаем метаданные результирующего предмета
+    const itemDef = getItemDefinition(resultName)
+    const rarityColor = getRarityColor(itemDef.rarity)
+    
+    // Устанавливаем цвет границы в зависимости от редкости
+    resultSlot.style.border = `2px solid ${rarityColor}`
+    
+    // Добавляем tooltip с информацией о предмете и сложности крафта
+    const difficultyName = getDifficultyName(rec.difficulty || CRAFT_DIFFICULTY.NORMAL)
+    const materialTypeName = getMaterialTypeName(itemDef.type)
+    const rarityName = getRarityName(itemDef.rarity)
+    
+    resultSlot.title = `${itemDef.description}\n` +
+      `Редкость: ${rarityName}\n` +
+      `Тип: ${materialTypeName}\n` +
+      `Сложность крафта: ${difficultyName}`
   } else {
     resultSlot.textContent = ""
     resultSlot.dataset.result = ""
+    resultSlot.style.border = "2px solid yellow"
+    resultSlot.title = ""
   }
 }
 
@@ -226,7 +284,7 @@ grid.forEach(cell => {
     const selected = getSelectedItem()
     if (!selected) return
     cell.dataset.item = selected.name
-    cell.textContent = selected.name
+    cell.textContent = getShortName(selected.name)
     updateCrafting()
   }
 })

@@ -8,6 +8,7 @@ import { setWaterID } from "./world/water.js"
 import { updateWater } from "./world/water.js"
 import { getPigs, damagePig } from "./world/animals.js"
 import "./ui/inventory.js" // Подключаем инвентарь и крафтинг
+import { addItem } from "./ui/inventory.js"
 
 // =======================
 //    СОЗДАЁМ ДВИЖОК
@@ -45,7 +46,7 @@ async function start() {
         ids.blocks["grass"] ||
         Object.values(ids.blocks)[0]
 
-    setupInteraction(grassBlock)
+    setupInteraction(grassBlock, ids.blocks, ids.waterID)
 
     // ======= СПАВН У ВОДЫ =======
     await spawnPlayerNearWater(ids)
@@ -128,14 +129,86 @@ function setupPlayerMesh() {
 // =======================
 //   ЛОМАНИЕ / СТАВКА
 // =======================
-function setupInteraction(placeBlockID) {
+function setupInteraction(placeBlockID, blocksMap, waterID) {
     const canvas = noa.container.canvas
+
+    // Создаем обратный маппинг: ID блока -> имя блока
+    const blockIdToName = {}
+    for (const [name, id] of Object.entries(blocksMap)) {
+        blockIdToName[id] = name
+    }
+    
+    // Функция для определения названия предмета на основе блока и биома
+    function getItemNameFromBlock(blockName, x, z) {
+        // Дерево/бревна - всегда одинаковые
+        if (blockName === 'log' || blockName === 'log_top' || blockName === 'log_side') {
+            return 'log'
+        }
+        
+        // Блоки земли и травы - зависят от биома
+        const biome = getBiome(x, z)
+        const isDirtOrGrass = 
+            blockName === 'dirt' ||
+            blockName === 'grass' ||
+            blockName === 'grass_top' ||
+            blockName === 'grass_side' ||
+            blockName === 'grass_dry' ||
+            blockName === 'grass_dry_top' ||
+            blockName === 'grass_dry_side' ||
+            blockName === 'tundra_grass' ||
+            blockName === 'tundra_grass_top' ||
+            blockName === 'tundra_grass_side' ||
+            blockName === 'snow_transition' ||
+            blockName === 'snow_transition_side'
+        
+        if (isDirtOrGrass) {
+            // Определяем название на основе биома
+            switch (biome) {
+                case 'plains':
+                case 'forest':
+                    return 'dirt_plains'
+                case 'tundra':
+                case 'snow':
+                case 'ice':
+                    return 'dirt_tundra'
+                case 'desert':
+                case 'red_desert':
+                case 'dry':
+                    return 'dirt_desert'
+                case 'mountain':
+                    return 'dirt_mountain'
+                default:
+                    return 'dirt_plains'
+            }
+        }
+        
+        // Для остальных блоков возвращаем исходное имя
+        return blockName
+    }
 
     noa.inputs.down.on("fire", () => {
         // Сначала проверяем блоки (как обычно)
         if (noa.targetedBlock) {
             const p = noa.targetedBlock.position
+            // Получаем ID блока перед его разрушением
+            const blockId = noa.getBlock(p[0], p[1], p[2])
+            
+            // Разрушаем блок
             noa.setBlock(0, p[0], p[1], p[2])
+            
+            // Если блок не воздух (0) и не вода, добавляем его в инвентарь
+            if (blockId !== 0 && blockId !== waterID) {
+                const blockName = blockIdToName[blockId]
+                if (blockName) {
+                    // Преобразуем имя блока в имя предмета с учетом биома
+                    const itemName = getItemNameFromBlock(blockName, p[0], p[2])
+                    addItem(itemName, 1)
+                    console.log(`📦 Получен блок: ${blockName} -> ${itemName} (биом: ${getBiome(p[0], p[2])})`)
+                } else {
+                    // Если имя не найдено, пробуем использовать ID как имя
+                    console.warn(`⚠ Неизвестный блок ID: ${blockId}`)
+                }
+            }
             return
         }
         

@@ -1,6 +1,7 @@
 // ui/inventory.js — инвентарь и hotbar
 import { noa } from '../engine.js'
 import './crafting.js'
+import { getItemDefinition, getRarityColor, getShortName } from './items.js'
 
 const HOTBAR_SLOTS = 9
 export const inventory = new Array(HOTBAR_SLOTS).fill(null)
@@ -35,7 +36,9 @@ function drawInventory() {
     slot.style.alignItems = 'center'
     slot.style.justifyContent = 'center'
     slot.style.color = '#fff'
-    slot.style.font = '13px/1.1 monospace'
+    slot.style.font = '10px monospace'
+    slot.style.fontSize = '10px'
+    slot.style.lineHeight = '1.0'
     slot.style.pointerEvents = 'auto'
     slot.style.userSelect = 'none'
     slot.style.cursor = 'pointer'
@@ -45,16 +48,41 @@ function drawInventory() {
     if (item) {
       slot.draggable = true // Включаем перетаскивание для слотов с предметами
       
+      // Получаем метаданные предмета для отображения редкости
+      const itemDef = getItemDefinition(item.name)
+      const rarityColor = getRarityColor(itemDef.rarity)
+      
+      // Устанавливаем цвет границы в зависимости от редкости
+      if (i === selectedSlot) {
+        slot.style.border = `3px solid ${rarityColor}`
+      } else {
+        slot.style.border = `2px solid ${rarityColor}`
+      }
+      
       const name = document.createElement('div')
-      name.textContent = item.name
+      name.textContent = getShortName(item.name)
       name.style.pointerEvents = 'none' // Не блокируем drag события
+      name.style.fontSize = '10px'
+      name.style.lineHeight = '1.0'
+      name.style.textAlign = 'center'
+      name.style.overflow = 'hidden'
+      name.style.textOverflow = 'ellipsis'
+      name.style.whiteSpace = 'nowrap'
+      name.style.maxWidth = '100%'
+      
       const count = document.createElement('div')
       count.textContent = item.count
-      count.style.fontSize = '11px'
-      count.style.opacity = '0.75'
+      count.style.fontSize = '10px'
+      count.style.opacity = '0.85'
       count.style.pointerEvents = 'none' // Не блокируем drag события
+      count.style.marginTop = '2px'
+      count.style.lineHeight = '1.0'
+      
       slot.appendChild(name)
       slot.appendChild(count)
+      
+      // Добавляем tooltip с информацией о предмете
+      slot.title = `${itemDef.description}\nРедкость: ${itemDef.rarity}\nТип: ${itemDef.type}\nСложность: ${itemDef.craftDifficulty}`
       
       // Обработчик начала перетаскивания
       slot.addEventListener('dragstart', (e) => {
@@ -73,6 +101,12 @@ function drawInventory() {
       })
     } else {
       slot.draggable = false // Пустые слоты не перетаскиваются
+      // Для пустых слотов используем стандартный цвет
+      if (i === selectedSlot) {
+        slot.style.border = '3px solid yellow'
+      } else {
+        slot.style.border = '2px solid gray'
+      }
     }
     
     // Обработчик клика для выбора слота
