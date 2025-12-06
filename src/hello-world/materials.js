@@ -1,0 +1,118 @@
+// materials.js
+import { generateTextures } from "./texture_runtime_loader.js"
+
+export async function initMaterialsAndBlocks(noa) {
+    // Загружаем CVAE текстуры
+    const tex = await generateTextures()
+    const make = b64 => "data:image/png;base64," + b64
+
+    const blocks = {}
+    const materials = {}
+    let blockIdCounter = 1
+
+    // ======================================
+    // 1. Регистрируем материалы CVAE
+    // ======================================
+    for (const name of Object.keys(tex)) {
+        const matName = "mat_" + name
+        noa.registry.registerMaterial(matName, {
+            textureURL: make(tex[name])
+        })
+        materials[name] = matName
+    }
+
+    // ======================================
+    // 2. Функции создания блоков
+    // ======================================
+
+    function makeSimple(name) {
+        if (!materials[name]) return
+        blocks[name] = noa.registry.registerBlock(blockIdCounter++, {
+            material: materials[name]
+        })
+    }
+
+    function make3(name, top, bottom, side) {
+        if (!materials[top] || !materials[bottom] || !materials[side]) return
+        blocks[name] = noa.registry.registerBlock(blockIdCounter++, {
+            material: [
+                materials[top],     // top
+                materials[bottom],  // bottom
+                materials[side]     // sides
+            ]
+        })
+    }
+
+    function makeTransparent(name) {
+        if (!materials[name]) return
+        blocks[name] = noa.registry.registerBlock(blockIdCounter++, {
+            material: materials[name],
+            opaque: false
+        })
+    }
+
+    // ======================================
+    // 3. Блоки
+    // ======================================
+
+    makeSimple("dirt")
+    makeSimple("stone")
+    makeSimple("andesite")
+    makeSimple("granite")
+    makeSimple("gravel")
+
+    makeSimple("sand")
+    makeSimple("red_sand")
+    makeSimple("desert_rock")
+
+    makeSimple("snow_top")
+    makeSimple("snow_side")
+    makeSimple("ice")
+
+    make3("grass", "grass_top", "dirt", "grass_side")
+    make3("grass_dry", "grass_dry_top", "dirt", "grass_dry_side")
+
+    make3("tundra_grass", "tundra_grass_top", "dirt", "tundra_grass_side")
+
+    // ЛОГИ
+    if (materials["log_top"] && materials["log_side"]) {
+        blocks["log"] = noa.registry.registerBlock(blockIdCounter++, {
+            material: [
+                materials["log_top"],   // top
+                materials["log_top"],   // bottom
+                materials["log_side"]   // sides
+            ]
+        })
+    }
+
+    makeTransparent("leaves_oak")
+    makeTransparent("leaves_pine")
+    makeTransparent("leaves_savanna")
+
+    // ======================================
+    // 4. ВОДА (нет текстуры — только цвет)
+    // ======================================
+    noa.registry.registerMaterial("mat_water", {
+        color: [0.4, 0.5, 0.9, 0.45],
+    })
+
+    materials["water"] = "mat_water"
+
+    blocks["water"] = noa.registry.registerBlock(blockIdCounter++, {
+        material: "mat_water",
+        fluid: true,
+        opaque: false
+    })
+
+    const waterID = blocks["water"]
+
+    // ======================================
+    console.log("✔ Материалы:", Object.keys(materials))
+    console.log("✔ Блоки:", Object.keys(blocks))
+
+    return {
+        blocks,
+        materials,
+        waterID
+    }
+}

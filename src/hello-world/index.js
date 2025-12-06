@@ -1,164 +1,165 @@
+// index.js
+import { Engine } from "noa-engine"
+import { initMaterialsAndBlocks } from "./materials.js"
+import { registerWorldGeneration, getHeightAt } from "./world/worldgen.js"
+import { getBiome } from "./biome.js"
+import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder"
+import { setWaterID } from "./world/water.js"
 
-
-/* 
- * 
- *          noa hello-world example
- * 
- *  This is a bare-minimum example world, intended to be a 
- *  starting point for hacking on noa game world content.
- * 
-*/
-
-
-
-// Engine options object, and engine instantiation.
-import { Engine } from 'noa-engine'
-
-
-var opts = {
+// =======================
+//    СОЗДАЁМ ДВИЖОК
+// =======================
+const noa = new Engine({
     debug: true,
     showFPS: true,
     chunkSize: 32,
     chunkAddDistance: 2.5,
     chunkRemoveDistance: 3.5,
-    // See `test` example, or noa docs/source, for more options
-}
-var noa = new Engine(opts)
+    playerStart: [0, 200, 0],
+})
 
+window.noa = noa
 
+// =======================
+//       СТАРТ ИГРЫ
+// =======================
+async function start() {
+    console.log("🚀 Старт: загрузка текстур и блоков")
 
-/*
- *
- *      Registering voxel types
- * 
- *  Two step process. First you register a material, specifying the 
- *  color/texture/etc. of a given block face, then you register a 
- *  block, which specifies the materials for a given block type.
- * 
-*/
+    const ids = await initMaterialsAndBlocks(noa)
 
-// block materials (just colors for this demo)
-var brownish = [0.45, 0.36, 0.22]
-var greenish = [0.1, 0.8, 0.2]
-noa.registry.registerMaterial('dirt', { color: brownish })
-noa.registry.registerMaterial('grass', { color: greenish })
+    // установить ID воды
+    setWaterID(ids.waterID)
 
+    registerWorldGeneration(noa, ids)
 
-// block types and their material names
-var dirtID = noa.registry.registerBlock(1, { material: 'dirt' })
-var grassID = noa.registry.registerBlock(2, { material: 'grass' })
+    setupPlayerMesh()
 
+    // выбираем пригодный блок для E
+    const grassBlock =
+        ids.blocks["grass_top"] ||
+        ids.blocks["grass"] ||
+        Object.values(ids.blocks)[0]
 
+    setupInteraction(grassBlock)
 
-
-/*
- * 
- *      World generation
- * 
- *  The world is divided into chunks, and `noa` will emit an 
- *  `worldDataNeeded` event for each chunk of data it needs.
- *  The game client should catch this, and call 
- *  `noa.world.setChunkData` whenever the world data is ready.
- *  (The latter can be done asynchronously.)
- * 
-*/
-
-// simple height map worldgen function
-function getVoxelID(x, y, z) {
-    if (y < -3) return dirtID
-    var height = 2 * Math.sin(x / 10) + 3 * Math.cos(z / 20)
-    if (y < height) return grassID
-    return 0 // signifying empty space
+    // ======= СПАВН У ВОДЫ =======
+    await spawnPlayerNearWater(ids)
 }
 
-// register for world events
-noa.world.on('worldDataNeeded', function (id, data, x, y, z) {
-    // `id` - a unique string id for the chunk
-    // `data` - an `ndarray` of voxel ID data (see: https://github.com/scijs/ndarray)
-    // `x, y, z` - world coords of the corner of the chunk
-    for (var i = 0; i < data.shape[0]; i++) {
-        for (var j = 0; j < data.shape[1]; j++) {
-            for (var k = 0; k < data.shape[2]; k++) {
-                var voxelID = getVoxelID(x + i, y + j, z + k)
-                data.set(i, j, k, voxelID)
+start()
+
+// =======================
+//         СПАВН
+// =======================
+async function spawnPlayerNearWater(ids) {
+    const WATER = ids.waterID
+    console.log("💧 WATER ID =", WATER)
+
+    // случайный регион
+    const baseX = Math.floor(Math.random() * 4000 - 2000)
+    const baseZ = Math.floor(Math.random() * 4000 - 2000)
+
+    let best = null
+    let bestDist = Infinity
+    const R = 200
+
+    for (let dx = -R; dx <= R; dx++) {
+        for (let dz = -R; dz <= R; dz++) {
+            const x = baseX + dx
+            const z = baseZ + dz
+
+            const h = getHeightAt(x, z)
+
+            // проверяем воду на высоте h+1
+            const block = noa.getBlock(x, h + 1, z)
+
+            if (block === WATER) {
+                const d = dx * dx + dz * dz
+                if (d < bestDist) {
+                    bestDist = d
+                    best = { x, y: h + 4, z }
+                }
             }
         }
     }
-    // tell noa the chunk's terrain data is now set
-    noa.world.setChunkData(id, data)
-})
 
-
-
-
-/*
- * 
- *      Create a mesh to represent the player:
- * 
-*/
-
-// get the player entity's ID and other info (position, size, ..)
-var player = noa.playerEntity
-var dat = noa.entities.getPositionData(player)
-var w = dat.width
-var h = dat.height
-
-// add a mesh to represent the player, and scale it, etc.
-import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder'
-
-var scene = noa.rendering.getScene()
-var mesh = CreateBox('player-mesh', {}, scene)
-mesh.scaling.x = w
-mesh.scaling.z = w
-mesh.scaling.y = h
-
-// this adds a default flat material, without specularity
-mesh.material = noa.rendering.makeStandardMaterial()
-
-
-// add "mesh" component to the player entity
-// this causes the mesh to move around in sync with the player entity
-noa.entities.addComponent(player, noa.entities.names.mesh, {
-    mesh: mesh,
-    // offset vector is needed because noa positions are always the 
-    // bottom-center of the entity, and Babylon's CreateBox gives a 
-    // mesh registered at the center of the box
-    offset: [0, h / 2, 0],
-})
-
-
-/*
- * 
- *      Minimal interactivity 
- * 
-*/
-
-// clear targeted block on on left click
-noa.inputs.down.on('fire', function () {
-    if (noa.targetedBlock) {
-        var pos = noa.targetedBlock.position
-        noa.setBlock(0, pos[0], pos[1], pos[2])
+    if (best) {
+        console.log("💧 Найдена вода, спавн:", best)
+        noa.entities.setPosition(noa.playerEntity, [
+            best.x + 0.5,
+            best.y,
+            best.z + 0.5
+        ])
+    } else {
+        console.log("❌ ВОДА НЕ НАЙДЕНА, обычный спавн")
+        const y = getHeightAt(baseX, baseZ) + 3
+        noa.entities.setPosition(noa.playerEntity, [
+            baseX + 0.5,
+            y,
+            baseZ + 0.5
+        ])
     }
-})
+}
 
-// place some grass on right click
-noa.inputs.down.on('alt-fire', function () {
-    if (noa.targetedBlock) {
-        var pos = noa.targetedBlock.adjacent
-        noa.setBlock(grassID, pos[0], pos[1], pos[2])
-    }
-})
+// =======================
+//    МЕШ ИГРОКА
+// =======================
+function setupPlayerMesh() {
+    const player = noa.playerEntity
+    const dat = noa.entities.getPositionData(player)
 
-// add a key binding for "E" to do the same as alt-fire
-noa.inputs.bind('alt-fire', 'KeyE')
+    const scene = noa.rendering.getScene()
+    const mesh = CreateBox("player-mesh", {}, scene)
 
+    mesh.scaling.set(dat.width, dat.height, dat.width)
+    mesh.material = noa.rendering.makeStandardMaterial()
 
-// each tick, consume any scroll events and use them to zoom camera
-noa.on('tick', function (dt) {
-    var scroll = noa.inputs.pointerState.scrolly
-    if (scroll !== 0) {
-        noa.camera.zoomDistance += (scroll > 0) ? 1 : -1
-        if (noa.camera.zoomDistance < 0) noa.camera.zoomDistance = 0
-        if (noa.camera.zoomDistance > 10) noa.camera.zoomDistance = 10
+    noa.entities.addComponent(player, noa.entities.names.mesh, {
+        mesh,
+        offset: [0, dat.height / 2, 0],
+    })
+}
+
+// =======================
+//   ЛОМАНИЕ / СТАВКА
+// =======================
+function setupInteraction(placeBlockID) {
+    const canvas = noa.container.canvas
+
+    noa.inputs.down.on("fire", () => {
+        if (noa.targetedBlock) {
+            const p = noa.targetedBlock.position
+            noa.setBlock(0, p[0], p[1], p[2])
+        }
+    })
+
+    noa.inputs.down.on("alt-fire", () => {
+        if (noa.targetedBlock) {
+            const p = noa.targetedBlock.adjacent
+            noa.setBlock(placeBlockID, p[0], p[1], p[2])
+        }
+    })
+
+    noa.inputs.bind("alt-fire", "KeyE")
+
+    canvas.addEventListener("click", () => {
+        canvas.requestPointerLock()
+    })
+}
+
+// =======================
+//   БИОМЫ В РЕЖИМЕ REALTIME
+// =======================
+let lastBiome = null
+noa.on("tick", () => {
+    const p = noa.ents.getPosition(noa.playerEntity)
+    const bx = Math.floor(p[0])
+    const bz = Math.floor(p[2])
+
+    const biome = getBiome(bx, bz)
+    if (biome !== lastBiome) {
+        console.log("➡ Биом изменился:", biome)
+        lastBiome = biome
     }
 })
