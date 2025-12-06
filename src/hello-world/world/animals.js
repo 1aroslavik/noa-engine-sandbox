@@ -150,11 +150,16 @@ export function createPig(noa, scene, x, z, y = null, size = 'normal') {
     const originalEmissiveG = isSmall ? 0.12 : 0.06
     const originalEmissiveB = isSmall ? 0.12 : 0.06
     
+    const initialAngle = Math.random() * Math.PI * 2
+    const initialRotation = initialAngle - Math.PI / 2
+    
     pigs.push({
         id,
         mesh,
         body,
-        angle: Math.random() * Math.PI * 2,
+        angle: initialAngle,
+        targetAngle: initialAngle, // Целевой угол для плавного поворота
+        currentRotation: initialRotation, // Текущий угол поворота меша (синхронизирован с начальным углом)
         speed: baseSpeed + Math.random() * speedVariation, // Скорость зависит от размера
         directionChangeTimer: 60 + Math.floor(Math.random() * 60), // Начинаем с небольшой задержки
         jumpCooldown: 0,
@@ -164,7 +169,12 @@ export function createPig(noa, scene, x, z, y = null, size = 'normal') {
         material: material, // Сохраняем материал для подсветки
         originalEmissive: { r: originalEmissiveR, g: originalEmissiveG, b: originalEmissiveB }, // Оригинальные значения emissive
         isHighlighted: false, // Флаг подсветки
+        stuckCheckCounter: 0, // Счетчик для проверки застревания
+        lastPosition: [finalX + 0.5, spawnY, finalZ + 0.5], // Последняя позиция для проверки движения
     })
+    
+    // Устанавливаем начальный поворот меша
+    mesh.rotation.y = initialRotation
 
     const sizeEmoji = isSmall ? '🐽' : '🐷'
     console.log(`${sizeEmoji} ${size} Pig spawned at ${x} ${spawnY} ${z}`)
@@ -348,6 +358,7 @@ function registerTickHandler() {
         // Уменьшаем таймеры
         pig.directionChangeTimer--
         pig.jumpCooldown--
+        pig.stuckCheckCounter++
 
         // Проверка блока под свинкой - более надежная проверка
         const groundX = Math.floor(pos[0])
@@ -365,75 +376,95 @@ function registerTickHandler() {
         
         // Определяем высоту свиньи из физического тела
         const pigHeight = body.height || 1.2
+        const pigWidth = body.width || 0.7
         const checkHeight = Math.ceil(pigHeight)
         
-        // Проверяем блоки на разных уровнях (с учетом размера свиньи)
-        // Проверяем не только центр, но и края для более точной проверки
-        const stuckCheckPoints = [
-            [groundX, groundZ], // Центр
-            [groundX + 1, groundZ], // Справа
-            [groundX - 1, groundZ], // Слева
-            [groundX, groundZ + 1], // Вперед
-            [groundX, groundZ - 1], // Назад
-        ]
+        // Проверка застревания: проверяем только центр тела (упрощенная проверка)
+        const centerBlockY = Math.floor(pos[1])
+        const centerBlockX = Math.floor(pos[0])
+        const centerBlockZ = Math.floor(pos[2])
         
-        let isStuck = false
-        for (const [cx, cz] of stuckCheckPoints) {
-            const atFeet = currentNoa.getBlock(cx, groundY, cz)
-            const atBody = currentNoa.getBlock(cx, groundY + 1, cz)
-            // Проверяем только нужную высоту в зависимости от размера
-            if (checkHeight > 1) {
-                const atHead = currentNoa.getBlock(cx, groundY + 2, cz)
-                if (atFeet !== 0 || atBody !== 0 || atHead !== 0) {
-                    isStuck = true
-                    break
-                }
-            } else {
-                // Для маленьких свиней проверяем только до уровня тела
-                if (atFeet !== 0 || atBody !== 0) {
-                    isStuck = true
-                    break
-                }
-            }
+        const blockAtFeet = currentNoa.getBlock(centerBlockX, centerBlockY, centerBlockZ)
+        const blockAtBody = currentNoa.getBlock(centerBlockX, centerBlockY + 1, centerBlockZ)
+        const blockAtHead = checkHeight > 1 ? currentNoa.getBlock(centerBlockX, centerBlockY + 2, centerBlockZ) : 0
+        
+        // Проверка 1: Свинья внутри блока
+        const isInsideBlock = blockAtFeet !== 0 || blockAtBody !== 0 || blockAtHead !== 0
+        
+        // Проверка 2: Свинья не двигается (проверяем каждые 20 тиков = ~0.33 секунды)
+        let isNotMoving = false
+        if (pig.stuckCheckCounter >= 20) {
+            const lastPos = pig.lastPosition
+            const distance = Math.sqrt(
+                Math.pow(pos[0] - lastPos[0], 2) + 
+                Math.pow(pos[1] - lastPos[1], 2) + 
+                Math.pow(pos[2] - lastPos[2], 2)
+            )
+            // Минимальное ожидаемое расстояние = скорость * время * коэффициент
+            // За 0.33 секунды при скорости 0.2-0.35 свинья должна пройти минимум 0.05-0.1 блока
+            const minExpectedDistance = Math.max(0.05, pig.speed * 0.33 * 0.3) // 30% от ожидаемого расстояния
+            // Если свинья не двигается достаточно, и она на земле, и не падает/не прыгает
+            // Проверяем только горизонтальное движение (игнорируем вертикальное)
+            const horizontalDistance = Math.sqrt(
+                Math.pow(pos[0] - lastPos[0], 2) + 
+                Math.pow(pos[2] - lastPos[2], 2)
+            )
+            isNotMoving = horizontalDistance < minExpectedDistance && 
+                         under !== 0 && 
+                         Math.abs(body.velocity[1]) < 0.3 // Не падает и не прыгает
+            pig.stuckCheckCounter = 0
+            pig.lastPosition = [pos[0], pos[1], pos[2]]
         }
         
-        // Если свинья внутри блока, выталкиваем её вверх и ищем свободное место
-        if (isStuck) {
-            // Ищем ближайшее свободное место в радиусе 4 блоков
+        // Если свинья застряла (внутри блока или не двигается), выталкиваем её
+        if (isInsideBlock || isNotMoving) {
+            // Ищем ближайшее свободное место в радиусе 5 блоков
             let foundFreeSpot = false
             let freeX = pos[0]
             let freeY = pos[1]
             let freeZ = pos[2]
+            let bestDistance = Infinity
             
             // Получаем высоту свиньи из физического тела
             const pigHeight = body.height || 1.2
             const checkHeight = Math.ceil(pigHeight)
             const offsetY = pigHeight / 2
             
-            for (let radius = 1; radius <= 4 && !foundFreeSpot; radius++) {
-                for (let dx = -radius; dx <= radius && !foundFreeSpot; dx++) {
-                    for (let dz = -radius; dz <= radius && !foundFreeSpot; dz++) {
+            // Ищем ближайшее свободное место (не только первое найденное)
+            for (let radius = 1; radius <= 5; radius++) {
+                for (let dx = -radius; dx <= radius; dx++) {
+                    for (let dz = -radius; dz <= radius; dz++) {
+                        // Пропускаем центр
+                        if (dx === 0 && dz === 0) continue
+                        
                         const checkX = Math.floor(pos[0] + dx)
                         const checkZ = Math.floor(pos[2] + dz)
-                        const checkY = Math.floor(pos[1])
-                        
-                        const blockAtFeet = currentNoa.getBlock(checkX, checkY, checkZ)
-                        const blockAtBody = currentNoa.getBlock(checkX, checkY + 1, checkZ)
-                        const blockUnder = currentNoa.getBlock(checkX, checkY - 1, checkZ)
-                        
-                        // Проверяем блоки в зависимости от размера свиньи
-                        let isFree = blockAtFeet === 0 && blockAtBody === 0 && blockUnder !== 0
-                        if (checkHeight > 1) {
-                            const blockAtHead = currentNoa.getBlock(checkX, checkY + 2, checkZ)
-                            isFree = isFree && blockAtHead === 0
-                        }
-                        
-                        // Если место свободно и есть блок под ногами
-                        if (isFree) {
-                            foundFreeSpot = true
-                            freeX = checkX + 0.5
-                            freeY = checkY + 1 + offsetY
-                            freeZ = checkZ + 0.5
+                        // Проверяем несколько уровней по Y
+                        for (let dy = -2; dy <= 2; dy++) {
+                            const checkY = Math.floor(pos[1]) + dy
+                            
+                            const blockAtFeet = currentNoa.getBlock(checkX, checkY, checkZ)
+                            const blockAtBody = currentNoa.getBlock(checkX, checkY + 1, checkZ)
+                            const blockUnder = currentNoa.getBlock(checkX, checkY - 1, checkZ)
+                            
+                            // Проверяем блоки в зависимости от размера свиньи
+                            let isFree = blockAtFeet === 0 && blockAtBody === 0 && blockUnder !== 0
+                            if (checkHeight > 1) {
+                                const blockAtHead = currentNoa.getBlock(checkX, checkY + 2, checkZ)
+                                isFree = isFree && blockAtHead === 0
+                            }
+                            
+                            // Если место свободно и есть блок под ногами
+                            if (isFree) {
+                                const distance = Math.sqrt(dx * dx + dz * dz + dy * dy)
+                                if (distance < bestDistance) {
+                                    bestDistance = distance
+                                    foundFreeSpot = true
+                                    freeX = checkX + 0.5
+                                    freeY = checkY + 1 + offsetY
+                                    freeZ = checkZ + 0.5
+                                }
+                            }
                         }
                     }
                 }
@@ -446,17 +477,31 @@ function registerTickHandler() {
                 body.velocity[0] = 0
                 body.velocity[1] = 0
                 body.velocity[2] = 0
+                // Обновляем последнюю позицию
+                pig.lastPosition = [freeX, freeY, freeZ]
+                // Меняем направление, чтобы не застрять снова
+                pig.angle = Math.random() * Math.PI * 2
+                pig.targetAngle = pig.angle
             } else {
                 // Если не нашли место, выталкиваем вверх и в случайную сторону
                 const pushAngle = Math.random() * Math.PI * 2
-                body.velocity[1] = 0.6
-                body.velocity[0] = Math.cos(pushAngle) * 0.4
-                body.velocity[2] = Math.sin(pushAngle) * 0.4
+                body.velocity[1] = 0.8
+                body.velocity[0] = Math.cos(pushAngle) * 0.6
+                body.velocity[2] = Math.sin(pushAngle) * 0.6
                 // Также напрямую перемещаем вверх
-                const newPos = [pos[0], pos[1] + 1.5, pos[2]]
+                const newPos = [pos[0], pos[1] + 2, pos[2]]
                 currentNoa.entities.setPosition(id, newPos)
+                pig.lastPosition = [newPos[0], newPos[1], newPos[2]]
+                // Меняем направление
+                pig.angle = pushAngle
+                pig.targetAngle = pushAngle
             }
             continue
+        }
+        
+        // Обновляем последнюю позицию для проверки движения
+        if (pig.stuckCheckCounter === 0) {
+            pig.lastPosition = [pos[0], pos[1], pos[2]]
         }
         
         if (under === 0) {
@@ -466,22 +511,34 @@ function registerTickHandler() {
 
         // Периодическая смена направления (каждые 3-8 секунд)
         if (pig.directionChangeTimer <= 0) {
-            pig.angle = Math.random() * Math.PI * 2
+            pig.targetAngle = Math.random() * Math.PI * 2
+            pig.angle = pig.targetAngle // Сразу обновляем угол движения
             pig.directionChangeTimer = 180 + Math.floor(Math.random() * 300) // 3-8 секунд
         }
 
-        // СНАЧАЛА ПОВОРАЧИВАЕМ МЕШ - чтобы голова была направлена в сторону движения
-        // Голова изначально направлена по +Z (вперед в Babylon.js)
-        // В noa: angle = 0 → движение по +X, angle = π/2 → движение по +Z, angle = π → движение по -X, angle = 3π/2 → движение по -Z
-        // В Babylon.js: rotation.y = 0 → смотрение по +Z, rotation.y = π/2 → смотрение по -X, rotation.y = π → смотрение по -Z, rotation.y = 3π/2 → смотрение по +X
-        // Формула: rotation.y = angle - π/2
-        mesh.rotation.y = pig.angle - Math.PI / 2
+        // Плавная интерполяция угла поворота к целевому углу движения
+        // Это обеспечивает плавный поворот головы в направлении движения
+        const targetRotation = pig.angle - Math.PI / 2
+        let angleDiff = targetRotation - pig.currentRotation
+        
+        // Нормализуем разницу углов в диапазон [-π, π]
+        while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+        while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+        
+        // Плавная интерполяция с коэффициентом 0.15 (можно настроить для скорости поворота)
+        const rotationSpeed = 0.15
+        pig.currentRotation += angleDiff * rotationSpeed
+        
+        // Применяем поворот к мешу - голова теперь будет плавно поворачиваться
+        mesh.rotation.y = pig.currentRotation
         
         // Упрощенная проверка препятствий - только для прыжков
+        // Используем текущий угол поворота для проверки препятствий впереди
+        const currentMovementAngle = pig.currentRotation + Math.PI / 2
         if (under !== 0 && Math.abs(body.velocity[1]) < 0.1) {
             const checkDistance = 0.4
-            const fx = pos[0] + Math.cos(pig.angle) * checkDistance
-            const fz = pos[2] + Math.sin(pig.angle) * checkDistance
+            const fx = pos[0] + Math.cos(currentMovementAngle) * checkDistance
+            const fz = pos[2] + Math.sin(currentMovementAngle) * checkDistance
             const currentY = Math.floor(pos[1])
             
             const frontBlock = currentNoa.getBlock(Math.floor(fx), currentY, Math.floor(fz))
@@ -497,20 +554,24 @@ function registerTickHandler() {
                     if (jumpCheckBlock === 0) {
                         // Прыгаем ВПЕРЕД в направлении головы!
                         body.velocity[1] = 0.35
-                        // Добавляем горизонтальную скорость для прыжка вперед
-                        body.velocity[0] = Math.cos(pig.angle) * pig.speed * 2
-                        body.velocity[2] = Math.sin(pig.angle) * pig.speed * 2
+                        // Добавляем горизонтальную скорость для прыжка вперед в направлении головы
+                        body.velocity[0] = Math.cos(currentMovementAngle) * pig.speed * 2
+                        body.velocity[2] = Math.sin(currentMovementAngle) * pig.speed * 2
                         pig.jumpCooldown = 30
                     } else {
-                        // Не можем перепрыгнуть - меняем направление
-                        pig.angle = Math.random() * Math.PI * 2
+                        // Не можем перепрыгнуть - меняем направление плавно
+                        pig.targetAngle = Math.random() * Math.PI * 2
+                        pig.angle = pig.targetAngle
                         pig.directionChangeTimer = 15
                     }
                 }
             }
         }
         
-        // Движение - упрощенная логика, всегда применяем движение
+        // Движение - используем текущий угол поворота для направления движения
+        // Конвертируем текущий угол поворота меша обратно в угол движения
+        // rotation.y = angle - π/2, значит angle = rotation.y + π/2
+        const movementAngle = pig.currentRotation + Math.PI / 2
         const moveSpeed = pig.speed * 4
         
         // Проверяем, стоим ли на земле (более надежная проверка)
@@ -518,32 +579,15 @@ function registerTickHandler() {
         const isOnGround = under !== 0 || (body.velocity[1] >= -0.1 && body.velocity[1] < 0.3)
         
         if (isOnGround) {
-            // Всегда устанавливаем velocity в направлении движения
-            body.velocity[0] = Math.cos(pig.angle) * moveSpeed
-            body.velocity[2] = Math.sin(pig.angle) * moveSpeed
-            
-            // Также применяем прямое перемещение для надежности
-            const moveDistance = moveSpeed * 0.12
-            const newX = pos[0] + Math.cos(pig.angle) * moveDistance
-            const newZ = pos[2] + Math.sin(pig.angle) * moveDistance
-            const newY = pos[1]
-            
-            // Проверяем перед перемещением - если есть препятствие, просто не перемещаем напрямую
-            // но velocity все равно установлен, так что физика попытается двигаться
-            const finalCheckX = Math.floor(newX)
-            const finalCheckZ = Math.floor(newZ)
-            const finalCheckY = Math.floor(newY)
-            const finalBlock = currentNoa.getBlock(finalCheckX, finalCheckY, finalCheckZ)
-            const finalBlockAbove = currentNoa.getBlock(finalCheckX, finalCheckY + 1, finalCheckZ)
-            
-            if (finalBlock === 0 && finalBlockAbove === 0) {
-                // Нет препятствия - перемещаем напрямую для плавности
-                currentNoa.entities.setPosition(id, [newX, newY, newZ])
-            }
+            // Движемся в направлении, куда смотрит голова (текущий угол поворота)
+            // Это обеспечивает, что свинья движется вперед, а не боком
+            // Используем только velocity - физика сама обработает движение
+            body.velocity[0] = Math.cos(movementAngle) * moveSpeed
+            body.velocity[2] = Math.sin(movementAngle) * moveSpeed
         } else {
-            // Падаем - не двигаемся горизонтально
-            body.velocity[0] *= 0.8
-            body.velocity[2] *= 0.8
+            // Падаем - не двигаемся горизонтально, но сохраняем небольшое движение для контроля
+            body.velocity[0] *= 0.9
+            body.velocity[2] *= 0.9
         }
     }
     })
