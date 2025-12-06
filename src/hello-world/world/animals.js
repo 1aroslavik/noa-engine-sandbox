@@ -1,9 +1,10 @@
 // world/animals.js
 import * as BABYLON from '@babylonjs/core'
 import { noiseHeight } from '../biome.js'
-import { getHeightAt } from './worldgen.js'
+import { getHeightAt } from './height.js'
 import { getBiome } from '../biome.js'
 import { createPigMaterial } from '../materials.js'
+import { addItem } from '../ui/inventory.js'
 
 // Получаем noa из window (устанавливается в index.js) или из engine.js
 // @ts-ignore
@@ -144,6 +145,11 @@ export function createPig(noa, scene, x, z, y = null, size = 'normal') {
     // Здоровье зависит от размера: маленькие - 3, стандартные - 5
     const maxHealth = isSmall ? 3 : 5
     
+    // Сохраняем оригинальные значения emissiveColor для подсветки
+    const originalEmissiveR = isSmall ? 0.4 : 0.3
+    const originalEmissiveG = isSmall ? 0.12 : 0.06
+    const originalEmissiveB = isSmall ? 0.12 : 0.06
+    
     pigs.push({
         id,
         mesh,
@@ -155,6 +161,9 @@ export function createPig(noa, scene, x, z, y = null, size = 'normal') {
         size: size, // Сохраняем размер для отладки
         health: maxHealth,
         maxHealth: maxHealth,
+        material: material, // Сохраняем материал для подсветки
+        originalEmissive: { r: originalEmissiveR, g: originalEmissiveG, b: originalEmissiveB }, // Оригинальные значения emissive
+        isHighlighted: false, // Флаг подсветки
     })
 
     const sizeEmoji = isSmall ? '🐽' : '🐷'
@@ -246,6 +255,85 @@ function registerTickHandler() {
     
     currentNoa.on('tick', () => {
         tick++
+        
+        // Определяем, на какую свинью смотрит игрок (каждый тик для подсветки)
+        let targetedPig = null
+        if (currentNoa.playerEntity) {
+            const playerPos = currentNoa.entities.getPosition(currentNoa.playerEntity)
+            if (playerPos) {
+                // Получаем направление взгляда игрока из камеры
+                const camera = currentNoa.camera
+                const yaw = camera.heading
+                const pitch = camera.pitch
+                
+                // Вычисляем направление взгляда
+                const dirX = Math.cos(pitch) * Math.sin(yaw)
+                const dirY = -Math.sin(pitch)
+                const dirZ = Math.cos(pitch) * Math.cos(yaw)
+                
+                // Ищем ближайшую свинью в направлении взгляда (до 6 блоков)
+                const maxDistance = 6.0
+                let closestDistance = maxDistance
+                
+                for (const pig of pigs) {
+                    const pigPos = currentNoa.entities.getPosition(pig.id)
+                    if (!pigPos) continue
+                    
+                    // Вектор от игрока к свинье
+                    const dx = pigPos[0] - playerPos[0]
+                    const dy = pigPos[1] - playerPos[1]
+                    const dz = pigPos[2] - playerPos[2]
+                    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz)
+                    
+                    if (distance > maxDistance) continue
+                    
+                    // Проверяем, находится ли свинья в направлении взгляда
+                    const normDx = dx / distance
+                    const normDy = dy / distance
+                    const normDz = dz / distance
+                    
+                    // Скалярное произведение для проверки угла
+                    const dot = dirX * normDx + dirY * normDy + dirZ * normDz
+                    
+                    // Если свинья в конусе взгляда (угол < 60 градусов, dot > 0.5) - более широкий конус
+                    if (dot > 0.5 && distance < closestDistance) {
+                        closestDistance = distance
+                        targetedPig = pig
+                    }
+                }
+            }
+        }
+        
+        // Обновляем подсветку для всех свиней (каждый тик)
+        for (const pig of pigs) {
+            if (!pig.material || !pig.originalEmissive) continue
+            
+            const shouldHighlight = pig === targetedPig
+            if (pig.isHighlighted !== shouldHighlight) {
+                pig.isHighlighted = shouldHighlight
+                if (shouldHighlight) {
+                    // Подсвечиваем - значительно увеличиваем emissiveColor
+                    pig.material.emissiveColor.r = Math.min(1, pig.originalEmissive.r * 3)
+                    pig.material.emissiveColor.g = Math.min(1, pig.originalEmissive.g * 3)
+                    pig.material.emissiveColor.b = Math.min(1, pig.originalEmissive.b * 3)
+                    // Также немного увеличиваем diffuseColor для более заметной подсветки
+                    pig.material.diffuseColor.r = Math.min(1, pig.material.diffuseColor.r * 1.2)
+                    pig.material.diffuseColor.g = Math.min(1, pig.material.diffuseColor.g * 1.2)
+                    pig.material.diffuseColor.b = Math.min(1, pig.material.diffuseColor.b * 1.2)
+                } else {
+                    // Убираем подсветку - возвращаем оригинальные значения
+                    pig.material.emissiveColor.r = pig.originalEmissive.r
+                    pig.material.emissiveColor.g = pig.originalEmissive.g
+                    pig.material.emissiveColor.b = pig.originalEmissive.b
+                    // Возвращаем оригинальный diffuseColor
+                    const isSmall = pig.size === 'small'
+                    pig.material.diffuseColor.r = 1
+                    pig.material.diffuseColor.g = isSmall ? 0.3 : 0.2
+                    pig.material.diffuseColor.b = isSmall ? 0.3 : 0.2
+                }
+            }
+        }
+        
         if (tick % 6 !== 0) return
         
         if (pigs.length === 0) return
@@ -474,9 +562,15 @@ export function damagePig(noa, pig) {
     pig.health -= 1
     console.log(`🐷 Свинья получила урон! Здоровье: ${pig.health}/${pig.maxHealth}`)
     
-    // Если здоровье достигло 0, удаляем свинью
+    // Если здоровье достигло 0, удаляем свинью и добавляем мясо в инвентарь
     if (pig.health <= 0) {
         console.log(`🐷 Свинья исчезла!`)
+        
+        // Добавляем мясо в инвентарь
+        // Количество мяса зависит от размера свиньи
+        const meatCount = pig.size === 'small' ? 1 : 2
+        addItem('meat', meatCount)
+        console.log(`🥩 Получено мяса: ${meatCount}`)
         
         // Удаляем из массива
         const index = pigs.indexOf(pig)

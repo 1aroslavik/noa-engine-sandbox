@@ -1,6 +1,6 @@
 // ui/crafting.js — окно крафтинга 2x2
 
-import { inventory, addItem, getSelectedItem } from './inventory.js'
+import { inventory, addItem, getSelectedItem, removeItem, getSelectedSlot } from './inventory.js'
 
 // === РЕЦЕПТЫ КРАФТА ===
 // pattern — массив 2x2
@@ -35,7 +35,8 @@ craftDiv.style.border = "2px solid #555"
 craftDiv.style.display = "none"
 craftDiv.style.flexDirection = "column"
 craftDiv.style.gap = "8px"
-craftDiv.style.zIndex = "10000"
+craftDiv.style.zIndex = "10001" // Выше чем инвентарь
+craftDiv.style.pointerEvents = "auto" // Убеждаемся, что события работают
 document.body.appendChild(craftDiv)
 
 
@@ -52,7 +53,110 @@ for (let i = 0; i < 4; i++) {
   cell.style.justifyContent = "center"
   cell.style.color = "#fff"
   cell.style.font = "13px monospace"
+  cell.style.cursor = "pointer"
   cell.dataset.item = null
+  cell.dataset.gridIndex = String(i)
+  
+  // Разрешаем "бросать" предметы в ячейку
+  cell.addEventListener('dragenter', (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    cell.style.border = "2px solid yellow"
+    cell.style.background = "#333"
+  })
+  
+  cell.addEventListener('dragover', (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'move'
+  })
+  
+  cell.addEventListener('dragleave', (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    cell.style.border = "2px solid gray"
+    cell.style.background = "#111"
+  })
+  
+  // Обработчик "бросания" предмета
+  cell.addEventListener('drop', (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    cell.style.border = "2px solid gray"
+    cell.style.background = "#111"
+    
+    try {
+      const dataStr = e.dataTransfer.getData('text/plain')
+      if (!dataStr) {
+        console.warn('Нет данных для перетаскивания')
+        return
+      }
+      
+      const data = JSON.parse(dataStr)
+      console.log('Получены данные:', data)
+      
+      if (data && data.item && data.slotIndex !== undefined) {
+        // Проверяем, есть ли предмет в инвентаре
+        const slotItem = inventory[data.slotIndex]
+        if (!slotItem || slotItem.name !== data.item.name || slotItem.count <= 0) {
+          console.warn('Предмет больше не доступен в инвентаре')
+          return
+        }
+        
+        // Если ячейка уже заполнена тем же предметом, не делаем ничего
+        if (cell.dataset.item === data.item.name) {
+          console.log('Ячейка уже содержит этот предмет')
+          return
+        }
+        
+        // Уменьшаем количество в инвентаре на 1
+        if (removeItem(data.slotIndex, 1)) {
+          // Добавляем предмет в ячейку крафта
+          cell.dataset.item = data.item.name
+          cell.textContent = data.item.name
+          updateCrafting()
+          console.log('Предмет добавлен в ячейку:', data.item.name)
+        } else {
+          console.warn('Не удалось удалить предмет из инвентаря')
+        }
+      }
+    } catch (err) {
+      console.warn('Ошибка при перетаскивании:', err)
+    }
+  })
+  
+  // Обработчик клика для добавления предмета из инвентаря (резервный способ)
+  cell.addEventListener('click', () => {
+    const selected = getSelectedItem()
+    if (selected) {
+      // Проверяем, есть ли предмет в инвентаре
+      if (selected.count <= 0) {
+        console.warn('Предмет закончился в инвентаре')
+        return
+      }
+      
+      // Если ячейка уже заполнена тем же предметом, не делаем ничего
+      if (cell.dataset.item === selected.name) {
+        return
+      }
+      
+      // Уменьшаем количество в инвентаре на 1
+      const slotIndex = getSelectedSlot()
+      if (removeItem(slotIndex, 1)) {
+        cell.dataset.item = selected.name
+        cell.textContent = selected.name
+        updateCrafting()
+      }
+    } else if (cell.dataset.item) {
+      // Если кликнули по заполненной ячейке, возвращаем предмет в инвентарь
+      const itemName = cell.dataset.item
+      addItem(itemName, 1)
+      cell.dataset.item = null
+      cell.textContent = ""
+      updateCrafting()
+    }
+  })
+  
   craftDiv.appendChild(cell)
   grid.push(cell)
 }
@@ -149,7 +253,31 @@ resultSlot.onclick = () => {
 
 // === ОТКРЫТИЕ/ЗАКРЫТИЕ ИНТЕРФЕЙСА ===
 window.addEventListener("keydown", e => {
-  if (e.code === "KeyE") {
-    craftDiv.style.display = craftDiv.style.display === "none" ? "flex" : "none"
+  // Открываем крафт по E
+  if (e.code === "KeyE" && !e.shiftKey && !e.ctrlKey && !e.altKey) {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    // @ts-ignore
+    const noa = window.noa
+    const isOpening = craftDiv.style.display === "none" || craftDiv.style.display === ""
+    
+    if (isOpening) {
+      // Открываем окно крафта
+      craftDiv.style.display = "flex"
+      // Отключаем pointer lock, чтобы курсор был виден для перетаскивания
+      if (noa && noa.container && noa.container.canvas) {
+        document.exitPointerLock()
+        noa.container.canvas.style.cursor = "default"
+      }
+    } else {
+      // Закрываем окно крафта
+      craftDiv.style.display = "none"
+      // Включаем pointer lock обратно для управления камерой
+      if (noa && noa.container && noa.container.canvas) {
+        noa.container.canvas.requestPointerLock()
+        noa.container.canvas.style.cursor = "none"
+      }
+    }
   }
 })

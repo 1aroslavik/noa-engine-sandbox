@@ -6,6 +6,11 @@ const HOTBAR_SLOTS = 9
 export const inventory = new Array(HOTBAR_SLOTS).fill(null)
 export let selectedSlot = 0
 
+// Экспортируем функцию для получения selectedSlot
+export function getSelectedSlot() {
+  return selectedSlot
+}
+
 const container = document.createElement('div')
 container.style.position = 'absolute'
 container.style.bottom = '20px'
@@ -13,7 +18,7 @@ container.style.left = '50%'
 container.style.transform = 'translateX(-50%)'
 container.style.display = 'flex'
 container.style.gap = '8px'
-container.style.pointerEvents = 'none'
+container.style.pointerEvents = 'auto' // Включаем взаимодействие для кликов
 container.style.zIndex = '9999'
 document.body.appendChild(container)
 
@@ -31,20 +36,50 @@ function drawInventory() {
     slot.style.justifyContent = 'center'
     slot.style.color = '#fff'
     slot.style.font = '13px/1.1 monospace'
-    slot.style.pointerEvents = 'none'
+    slot.style.pointerEvents = 'auto'
     slot.style.userSelect = 'none'
+    slot.style.cursor = 'pointer'
+    slot.dataset.slotIndex = String(i)
 
     const item = inventory[i]
     if (item) {
+      slot.draggable = true // Включаем перетаскивание для слотов с предметами
+      
       const name = document.createElement('div')
       name.textContent = item.name
+      name.style.pointerEvents = 'none' // Не блокируем drag события
       const count = document.createElement('div')
       count.textContent = item.count
       count.style.fontSize = '11px'
       count.style.opacity = '0.75'
+      count.style.pointerEvents = 'none' // Не блокируем drag события
       slot.appendChild(name)
       slot.appendChild(count)
+      
+      // Обработчик начала перетаскивания
+      slot.addEventListener('dragstart', (e) => {
+        e.stopPropagation()
+        const data = JSON.stringify({ slotIndex: i, item: item })
+        e.dataTransfer.setData('text/plain', data)
+        e.dataTransfer.effectAllowed = 'move'
+        slot.style.opacity = '0.5'
+        console.log('Начато перетаскивание:', item.name)
+      })
+      
+      // Обработчик конца перетаскивания
+      slot.addEventListener('dragend', (e) => {
+        slot.style.opacity = '1'
+        console.log('Завершено перетаскивание')
+      })
+    } else {
+      slot.draggable = false // Пустые слоты не перетаскиваются
     }
+    
+    // Обработчик клика для выбора слота
+    slot.addEventListener('click', () => {
+      selectedSlot = i
+      drawInventory()
+    })
     container.appendChild(slot)
   }
 }
@@ -68,6 +103,21 @@ export function addItem(name, count = 1) {
     }
   }
   return false
+}
+
+// Удаление предмета из инвентаря (уменьшение количества или удаление)
+export function removeItem(slotIndex, count = 1) {
+  if (slotIndex < 0 || slotIndex >= HOTBAR_SLOTS) return false
+  if (!inventory[slotIndex]) return false
+  
+  inventory[slotIndex].count -= count
+  
+  if (inventory[slotIndex].count <= 0) {
+    inventory[slotIndex] = null
+  }
+  
+  drawInventory()
+  return true
 }
 
 function setSelected(idx) {

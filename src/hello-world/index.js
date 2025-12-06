@@ -7,6 +7,7 @@ import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder"
 import { setWaterID } from "./world/water.js"
 import { updateWater } from "./world/water.js"
 import { getPigs, damagePig } from "./world/animals.js"
+import "./ui/inventory.js" // Подключаем инвентарь и крафтинг
 
 // =======================
 //    СОЗДАЁМ ДВИЖОК
@@ -199,7 +200,8 @@ function setupInteraction(placeBlockID) {
         }
     })
 
-    noa.inputs.bind("alt-fire", "KeyE")
+    // Используем другую клавишу для ставки блоков, так как E используется для крафта
+    noa.inputs.bind("alt-fire", "KeyR")
 
     canvas.addEventListener("click", () => {
         canvas.requestPointerLock()

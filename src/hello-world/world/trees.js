@@ -1,6 +1,6 @@
 // trees.js
 import { getBiome } from "../biome.js"
-import { getHeightAt } from "./worldgen.js"
+import { getHeightAt } from "./height.js"
 
 // быстрое размещение блока
 function B(noa, id, x, y, z) {
