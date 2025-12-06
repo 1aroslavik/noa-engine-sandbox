@@ -2,7 +2,6 @@
 import { generateTextures } from "./texture_runtime_loader.js"
 
 export async function initMaterialsAndBlocks(noa) {
-    // Загружаем CVAE текстуры
     const tex = await generateTextures()
     const make = b64 => "data:image/png;base64," + b64
 
@@ -10,9 +9,9 @@ export async function initMaterialsAndBlocks(noa) {
     const materials = {}
     let blockIdCounter = 1
 
-    // ======================================
+    // ======================
     // 1. Регистрируем материалы CVAE
-    // ======================================
+    // ======================
     for (const name of Object.keys(tex)) {
         const matName = "mat_" + name
         noa.registry.registerMaterial(matName, {
@@ -21,9 +20,9 @@ export async function initMaterialsAndBlocks(noa) {
         materials[name] = matName
     }
 
-    // ======================================
-    // 2. Функции создания блоков
-    // ======================================
+    // ======================
+    // 2. Функции блоков
+    // ======================
 
     function makeSimple(name) {
         if (!materials[name]) return
@@ -51,9 +50,9 @@ export async function initMaterialsAndBlocks(noa) {
         })
     }
 
-    // ======================================
+    // ======================
     // 3. Блоки
-    // ======================================
+    // ======================
 
     makeSimple("dirt")
     makeSimple("stone")
@@ -71,16 +70,18 @@ export async function initMaterialsAndBlocks(noa) {
 
     make3("grass", "grass_top", "dirt", "grass_side")
     make3("grass_dry", "grass_dry_top", "dirt", "grass_dry_side")
-
     make3("tundra_grass", "tundra_grass_top", "dirt", "tundra_grass_side")
+
+    // ❄ ПЕРЕХОД СНЕГ → ЗЕМЛЯ (ТОЖЕ КАК ТРАВА)
+    make3("snow_transition", "snow_top", "dirt", "snow_transition_side")
 
     // ЛОГИ
     if (materials["log_top"] && materials["log_side"]) {
         blocks["log"] = noa.registry.registerBlock(blockIdCounter++, {
             material: [
-                materials["log_top"],   // top
-                materials["log_top"],   // bottom
-                materials["log_side"]   // sides
+                materials["log_top"],
+                materials["log_top"],
+                materials["log_side"]
             ]
         })
     }
@@ -89,9 +90,9 @@ export async function initMaterialsAndBlocks(noa) {
     makeTransparent("leaves_pine")
     makeTransparent("leaves_savanna")
 
-    // ======================================
-    // 4. ВОДА (нет текстуры — только цвет)
-    // ======================================
+    // ======================
+    // ВОДА
+    // ======================
     noa.registry.registerMaterial("mat_water", {
         color: [0.4, 0.5, 0.9, 0.45],
     })
@@ -106,13 +107,8 @@ export async function initMaterialsAndBlocks(noa) {
 
     const waterID = blocks["water"]
 
-    // ======================================
     console.log("✔ Материалы:", Object.keys(materials))
     console.log("✔ Блоки:", Object.keys(blocks))
 
-    return {
-        blocks,
-        materials,
-        waterID
-    }
+    return { blocks, materials, waterID }
 }
