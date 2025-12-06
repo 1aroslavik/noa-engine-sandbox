@@ -4,6 +4,7 @@ import { noa } from '../engine.js'
 import { noiseHeight } from '../biome.js'
 import { getHeightAt } from './worldgen.js'
 import { getBiome } from '../biome.js'
+import { createPigMaterial } from '../materials.js'
 
 // список всех животных
 const pigs = []
@@ -22,9 +23,7 @@ function getHeight(x, z) {
 // ------------------------------------------------------------
 // Создание меша свинки
 // ------------------------------------------------------------
-function buildPigMesh(scene) {
-    const material = new BABYLON.StandardMaterial('pigMat', scene)
-    material.diffuseColor = new BABYLON.Color3(1, 0, 0)
+function buildPigMesh(scene, material) {
 
     const body = BABYLON.MeshBuilder.CreateBox('pigBody', { width: 0.9, height: 0.6, depth: 1.2 }, scene)
     body.position.y = 0.3
@@ -56,7 +55,8 @@ function buildPigMesh(scene) {
 // Создание сущности свинки
 // ------------------------------------------------------------
 export function createPig(noa, scene, x, z, y = null) {
-    const mesh = buildPigMesh(scene)
+    const material = createPigMaterial(noa)
+    const mesh = buildPigMesh(scene, material)
     const groundY = y !== null ? y : getHeight(x, z)
     const spawnY = groundY + 1
 

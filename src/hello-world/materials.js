@@ -1,5 +1,6 @@
 // materials.js
 import { generateTextures } from "./texture_runtime_loader.js"
+import { Color3 } from '@babylonjs/core'
 
 export async function initMaterialsAndBlocks(noa) {
     const tex = await generateTextures()
@@ -111,4 +112,16 @@ export async function initMaterialsAndBlocks(noa) {
     console.log("✔ Блоки:", Object.keys(blocks))
 
     return { blocks, materials, waterID }
+}
+
+// ------------------------------------------------------------
+// Материал для свиней
+// ------------------------------------------------------------
+export function createPigMaterial(noa) {
+    const material = noa.rendering.makeStandardMaterial()
+    // Розовый цвет: RGB(1, 0.2, 0.2)
+    material.diffuseColor = new Color3(1, 0.2, 0.2)
+    // Добавляем эмиссию, чтобы цвет был виден даже в тени
+    material.emissiveColor = new Color3(0.3, 0.06, 0.06)
+    return material
 }
