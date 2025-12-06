@@ -54,9 +54,26 @@ async function start() {
 
     // ======= СПАВН У ВОДЫ =======
     await spawnPlayerNearWater(ids)
+
+    // Скрываем окно загрузки после полной инициализации
+    hideLoadingScreen()
 }
 
 start()
+
+// =======================
+//   СКРЫТИЕ ЗАГРУЗКИ
+// =======================
+function hideLoadingScreen() {
+    const loadingScreen = document.getElementById('loading-screen')
+    if (loadingScreen) {
+        loadingScreen.classList.add('hidden')
+        // Удаляем элемент после анимации
+        setTimeout(() => {
+            loadingScreen.remove()
+        }, 500)
+    }
+}
 
 // =======================
 //         СПАВН
