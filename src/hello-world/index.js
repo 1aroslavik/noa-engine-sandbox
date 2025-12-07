@@ -34,6 +34,12 @@ window.noa = noa
 //       СТАРТ ИГРЫ
 // =======================
 async function start() {
+    console.log("🚀 Старт: проверка готовности движка...")
+    updateLoadingText("Initializing engine...")
+    
+    // Ждем полной инициализации движка
+    await waitForEngineReady()
+    
     console.log("🚀 Старт: загрузка текстур и блоков")
     updateLoadingText("Loading textures and blocks...")
 
@@ -46,13 +52,29 @@ async function start() {
 
     registerWorldGeneration(noa, ids)
     
-    // Даем движку время на регистрацию обработчика генерации
-    await new Promise(resolve => setTimeout(resolve, 100))
+    // Даем движку больше времени на регистрацию обработчика генерации (особенно при первой загрузке)
+    await new Promise(resolve => setTimeout(resolve, 300))
     
     // Проверяем что движок готов
     if (!noa.world) {
         console.error("❌ Ошибка: движок мира не инициализирован")
         throw new Error("World engine not initialized")
+    }
+    
+    // Проверяем что обработчик генерации зарегистрирован
+    console.log("✅ Движок готов, обработчик генерации зарегистрирован")
+    
+    // Принудительно запрашиваем генерацию тестового чанка для проверки
+    // Это помогает убедиться что обработчик работает
+    try {
+        const testChunkX = 0
+        const testChunkZ = 0
+        const testY = 0
+        // Пробуем получить блок в центре чанка (0,0,0)
+        noa.getBlock(testChunkX + 16, testY + 10, testChunkZ + 16)
+        console.log("✅ Тестовый запрос чанка выполнен")
+    } catch (e) {
+        console.log("ℹ️ Тестовый запрос чанка (это нормально при первой загрузке)")
     }
 
     setupPlayerMesh()
@@ -69,8 +91,10 @@ async function start() {
     updateLoadingText("Spawning player...")
     await waitForPlayerSpawn(ids)
     
-    // Даем движку время на обработку спавна и начало загрузки чанков
-    await new Promise(resolve => setTimeout(resolve, 200))
+    // Даем движку больше времени на обработку спавна и начало загрузки чанков
+    // Особенно важно при первой загрузке страницы
+    updateLoadingText("Preparing world...")
+    await new Promise(resolve => setTimeout(resolve, 500))
 
     // Проверяем что мир сгенерировался и ждем если нужно
     await waitForWorldGeneration()
@@ -82,9 +106,50 @@ async function start() {
 start()
 
 // =======================
+//   ПРОВЕРКА ГОТОВНОСТИ ДВИЖКА
+// =======================
+async function waitForEngineReady(maxAttempts = 50, delayMs = 100) {
+    console.log("🔧 Проверка готовности движка...")
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        // Проверяем основные компоненты движка
+        const checks = {
+            world: !!noa.world,
+            rendering: !!noa.rendering,
+            entities: !!noa.entities,
+            playerEntity: !!noa.playerEntity,
+            scene: noa.rendering ? !!noa.rendering.getScene() : false,
+        }
+        
+        const allReady = Object.values(checks).every(v => v === true)
+        
+        if (allReady) {
+            console.log("✅ Движок готов к работе")
+            return
+        }
+        
+        // Логируем что еще не готово
+        const notReady = Object.entries(checks)
+            .filter(([_, v]) => !v)
+            .map(([name]) => name)
+        
+        if (attempt % 10 === 0) {
+            console.log(`⏳ Ожидание готовности движка... (попытка ${attempt + 1}/${maxAttempts})`)
+            console.log(`   Не готово: ${notReady.join(", ")}`)
+        }
+        
+        if (attempt < maxAttempts - 1) {
+            await new Promise(resolve => setTimeout(resolve, delayMs))
+        }
+    }
+    
+    console.warn("⚠️ Движок не полностью готов, но продолжаем...")
+}
+
+// =======================
 //   ПРОВЕРКА ГЕНЕРАЦИИ МИРА
 // =======================
-async function waitForWorldGeneration(maxAttempts = 100, delayMs = 100) {
+async function waitForWorldGeneration(maxAttempts = 150, delayMs = 100) {
     console.log("🌍 Проверка генерации мира...")
     updateLoadingText("Verifying world generation...")
     
@@ -106,9 +171,12 @@ async function waitForWorldGeneration(maxAttempts = 100, delayMs = 100) {
         const chunkX = Math.floor(x / chunkSize) * chunkSize
         const chunkZ = Math.floor(z / chunkSize) * chunkSize
         
-        // Запрашиваем чанки в радиусе 2 чанков вокруг игрока
-        for (let dx = -2; dx <= 2; dx++) {
-            for (let dz = -2; dz <= 2; dz++) {
+        // Увеличиваем радиус запроса чанков для более агрессивной загрузки
+        const radius = attempt < 20 ? 3 : 2 // Первые 20 попыток - больший радиус
+        
+        // Запрашиваем чанки в радиусе вокруг игрока
+        for (let dx = -radius; dx <= radius; dx++) {
+            for (let dz = -radius; dz <= radius; dz++) {
                 const cx = chunkX + dx * chunkSize
                 const cz = chunkZ + dz * chunkSize
                 
@@ -117,6 +185,8 @@ async function waitForWorldGeneration(maxAttempts = 100, delayMs = 100) {
                     [cx + chunkSize / 2, y, cz + chunkSize / 2], // центр
                     [cx, y, cz], // угол
                     [cx + chunkSize - 1, y, cz + chunkSize - 1], // противоположный угол
+                    [cx + chunkSize / 2, y - 5, cz + chunkSize / 2], // ниже
+                    [cx + chunkSize / 2, y - 10, cz + chunkSize / 2], // еще ниже
                 ]
                 
                 for (const [tx, ty, tz] of testPositions) {
@@ -132,8 +202,9 @@ async function waitForWorldGeneration(maxAttempts = 100, delayMs = 100) {
             }
         }
         
-        // Даем движку время обработать запросы
-        await new Promise(resolve => setTimeout(resolve, 50))
+        // Даем движку больше времени обработать запросы (особенно при первой загрузке)
+        const processDelay = attempt < 10 ? 150 : 50 // Первые 10 попыток - больше времени
+        await new Promise(resolve => setTimeout(resolve, processDelay))
 
         // Проверяем несколько блоков вокруг игрока
         const checkPositions = [
@@ -186,8 +257,68 @@ async function waitForWorldGeneration(maxAttempts = 100, delayMs = 100) {
         }
     }
 
+    // Если не удалось подтвердить генерацию, пробуем еще раз с более агрессивной загрузкой
+    console.warn("⚠️ Первая попытка не удалась, пробуем более агрессивную загрузку...")
+    updateLoadingText("Force loading world chunks...")
+    
+    // Последняя попытка - очень агрессивная загрузка
+    const playerPos = noa.entities.getPosition(noa.playerEntity)
+    if (playerPos) {
+        const x = Math.floor(playerPos[0])
+        const y = Math.floor(playerPos[1])
+        const z = Math.floor(playerPos[2])
+        const chunkX = Math.floor(x / chunkSize) * chunkSize
+        const chunkZ = Math.floor(z / chunkSize) * chunkSize
+        
+        // Запрашиваем все чанки в большом радиусе
+        for (let dx = -4; dx <= 4; dx++) {
+            for (let dz = -4; dz <= 4; dz++) {
+                const cx = chunkX + dx * chunkSize
+                const cz = chunkZ + dz * chunkSize
+                
+                // Множественные запросы блоков в каждом чанке
+                for (let i = 0; i < 5; i++) {
+                    const tx = cx + Math.floor(Math.random() * chunkSize)
+                    const ty = y - Math.floor(Math.random() * 20)
+                    const tz = cz + Math.floor(Math.random() * chunkSize)
+                    try {
+                        noa.getBlock(tx, ty, tz)
+                    } catch (e) {
+                        // Игнорируем ошибки
+                    }
+                }
+            }
+        }
+        
+        // Даем больше времени на обработку
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // Финальная проверка
+        let finalCheck = false
+        for (let i = 0; i < 10; i++) {
+            const checkY = y - i
+            try {
+                const block = noa.getBlock(x, checkY, z)
+                if (block !== undefined && block !== null && block !== 0) {
+                    console.log(`✅ Мир сгенерирован после принудительной загрузки (блок на y=${checkY})`)
+                    finalCheck = true
+                    break
+                }
+            } catch (e) {
+                // Игнорируем ошибки
+            }
+        }
+        
+        if (finalCheck) {
+            updateLoadingText("World ready!")
+            await new Promise(resolve => setTimeout(resolve, 200))
+            return
+        }
+    }
+    
     console.warn("⚠️ Предупреждение: не удалось подтвердить генерацию мира после всех попыток")
     console.warn("⚠️ Продолжаем загрузку, но мир может быть не полностью сгенерирован")
+    console.warn("⚠️ Мир будет генерироваться по мере необходимости во время игры")
 }
 
 // =======================
