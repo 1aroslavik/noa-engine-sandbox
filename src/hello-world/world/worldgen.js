@@ -133,88 +133,161 @@ export function registerWorldGeneration(noa, ids) {
 
 
 
+// Универсальный шумовой фильтр для поверхностного декора
+function F(noise, x, z, scale) {
+    return Math.abs(noise(x * scale, z * scale));
+}
 
-// функция шума (вынесена наверх — больше не ломает циклы)
-function F(noise, wx, wz, scale) {
-    return Math.abs(noise(wx * scale, wz * scale));
-};
+
 
 // =====================================================
-// ПОВЕРХНОСТНЫЕ УКРАШЕНИЯ
+// ДЕКОР БИОМОВ — БЕЗ ПЕЩЕР И РАЗЛОМОВ
 // =====================================================
 if (y === 0 && wy === height) {
 
-    // -----------------------
-    // равнины и леса
-    // -----------------------
-    if (biome === "plains" || biome === "forest") {
-        const pebble = F(_caveCheese, wx, wz, 0.035);
-        if (pebble < 0.015) {
+    // -------------------------
+    // 🌿 PLAINS — РАВНИНЫ
+    // -------------------------
+    if (biome === "plains") {
+
+        // мелкие пятна гравия
+        if (F(_caveCheese, wx, wz, 0.04) < 0.015) {
             data.set(i, j, k, GRAVEL);
             continue;
         }
-        const boulder = F(_caveCrack, wx, wz, 0.02);
-        if (boulder < 0.01) {
+
+        // камни
+        if (F(_caveCrack, wx, wz, 0.03) < 0.01) {
             data.set(i, j, k, STONE);
+            continue;
+        }
+
+        // подсушенная трава местами
+        if (F(_caveWormA, wx, wz, 0.05) < 0.018) {
+            data.set(i, j, k, GRASS_DRY_TOP);
             continue;
         }
     }
 
-    // -----------------------
-    // горы и снег
-    // -----------------------
-    if (biome === "mountain" || biome === "snow") {
-        const rock = F(_caveCheese, wx, wz, 0.02);
-        if (rock < 0.018) {
+    // -------------------------
+    // 🌲 FOREST — ЛЕС
+    // -------------------------
+    if (biome === "forest") {
+
+        // камни под деревьями
+        if (F(_caveCheese, wx, wz, 0.03) < 0.012) {
             data.set(i, j, k, STONE);
             continue;
         }
-        const rubble = F(_caveWormB, wx, wz, 0.05);
-        if (rubble < 0.028) {
-            data.set(i, j, k, GRAVEL);
+
+        // мох и влажная почва
+        if (F(_caveWormA, wx, wz, 0.05) < 0.022) {
+            data.set(i, j, k, DIRT);
             continue;
         }
     }
 
-    // -----------------------
-    // пустыня
-    // -----------------------
+    // -------------------------
+    // 🏜 DESERT — ПУСТЫНЯ
+    // -------------------------
     if (biome === "desert") {
-        const dune = F(_caveCheese, wx, wz, 0.012);
-        if (dune < 0.025) {
+
+        // большие дюны
+        if (F(_caveCheese, wx, wz, 0.008) < 0.03) {
             data.set(i, j, k, SAND);
             continue;
         }
-    }
 
-    // красная пустыня
-    if (biome === "red_desert") {
-        const redRock = F(_caveCrack, wx, wz, 0.02);
-        if (redRock < 0.018) {
+        // пятна камня
+        if (F(_caveCrack, wx, wz, 0.02) < 0.01) {
             data.set(i, j, k, DESERT_ROCK);
             continue;
         }
     }
 
-    // тундра
-    if (biome === "tundra") {
-        const crust = F(_caveCrack, wx, wz, 0.02);
-        if (crust < 0.02) {
+    // -------------------------
+    // ❤️ RED DESERT — КРАСНАЯ ПУСТЫНЯ
+    // -------------------------
+    if (biome === "red_desert") {
+
+        // красные камни
+        if (F(_caveCrack, wx, wz, 0.02) < 0.015) {
+            data.set(i, j, k, DESERT_ROCK);
+            continue;
+        }
+    }
+
+    // -------------------------
+    // 🏔 MOUNTAIN — ГОРЫ
+    // -------------------------
+    if (biome === "mountain") {
+
+        // щебень
+        if (F(_caveWormB, wx, wz, 0.05) < 0.03) {
+            data.set(i, j, k, GRAVEL);
+            continue;
+        }
+
+        // каменные выступы
+        if (F(_caveCrack, wx, wz, 0.025) < 0.015) {
+            data.set(i, j, k, STONE);
+            continue;
+        }
+    }
+
+    // -------------------------
+    // ❄ SNOW — СНЕГ
+    // -------------------------
+    if (biome === "snow") {
+
+        // рыхлый снег
+        if (Math.random() < 0.2) {
+            data.set(i, j, k, SNOW_BLOCK);
+            continue;
+        }
+
+        // сжатый снег
+        if (F(_caveCheese, wx, wz, 0.02) < 0.015) {
             data.set(i, j, k, SNOW_SIDE);
             continue;
         }
     }
 
-    // сухие земли
+    // -------------------------
+    // 🌨 TUNDRA — ТУНДРА
+    // -------------------------
+    if (biome === "tundra") {
+
+        if (F(_caveCrack, wx, wz, 0.03) < 0.02) {
+            data.set(i, j, k, SNOW_SIDE);
+            continue;
+        }
+
+        // мерзлая почва
+        if (F(_caveWormA, wx, wz, 0.04) < 0.018) {
+            data.set(i, j, k, DIRT);
+            continue;
+        }
+    }
+
+    // -------------------------
+    // 🌵 DRY — СУХИЕ ЗЕМЛИ
+    // -------------------------
     if (biome === "dry") {
-        const dust = F(_caveCheese, wx, wz, 0.03);
-        if (dust < 0.02) {
+
+        // жёлтая сухая трава пятнами
+        if (F(_caveCheese, wx, wz, 0.03) < 0.02) {
             data.set(i, j, k, GRASS_DRY_TOP);
+            continue;
+        }
+
+        // потрескавшаяся земля
+        if (F(_caveCrack, wx, wz, 0.04) < 0.015) {
+            data.set(i, j, k, DIRT);
             continue;
         }
     }
 }
-
 // =====================================================
 // КРАСИВЫЕ СЛОИ БИОМОВ
 // =====================================================
@@ -241,35 +314,6 @@ if (biome === "tundra" && wy < height - 4 && wy > height - 10) {
     }
 }
 
-// =====================================================
-// МАЛЕНЬКИЕ ПЕЩЕРЫ И ТОНКИЕ ТУННЕЛИ (ОПТИМАЛЬНОЕ МЕСТО!)
-// =====================================================
-if (wy < height - 6) {
-
-    // круглые комнаты
-    const cave1 = F(_caveCheese, wx, wz, 0.015);
-    if (cave1 < 0.020) {
-        data.set(i, j, k, 0);
-
-        if (Math.random() < 0.3 && j + 1 < SY)
-            data.set(i, j + 1, k, 0);
-
-        continue;
-    }
-
-    // узкие тоннели
-    const worm = F(_caveWormA, wx, wz, 0.02) +
-                 F(_caveWormB, wx, wz, 0.018) * 0.5;
-
-    if (worm < 0.040) {
-        data.set(i, j, k, 0);
-
-        if (Math.random() < 0.25 && j - 1 >= 0)
-            data.set(i, j - 1, k, 0);
-
-        continue;
-    }
-}
 
                     // =====================================================
                     // ГЛУБИНА
