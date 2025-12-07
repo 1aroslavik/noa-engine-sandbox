@@ -6,7 +6,7 @@ import { getBiome } from "./biome.js"
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder"
 import { setWaterID } from "./world/water.js"
 import { updateWater } from "./world/water.js"
-import { getPigs, damagePig } from "./world/animals.js"
+import { getPigs, damagePig, getCows, damageCow } from "./world/animals.js"
 import "./ui/inventory.js" // Подключаем инвентарь и крафтинг
 import { addItem } from "./ui/inventory.js"
 import { getItemDefinition } from "./ui/items.js"
@@ -67,7 +67,7 @@ async function start() {
 
     // ======= СПАВН У ВОДЫ =======
     updateLoadingText("Spawning player...")
-    await spawnPlayerNearWater(ids)
+    await waitForPlayerSpawn(ids)
     
     // Даем движку время на обработку спавна и начало загрузки чанков
     await new Promise(resolve => setTimeout(resolve, 200))
@@ -215,6 +215,89 @@ function hideLoadingScreen() {
 }
 
 // =======================
+//   ПРОВЕРКА СПАВНА ИГРОКА
+// =======================
+async function waitForPlayerSpawn(ids, maxAttempts = 20, delayMs = 200) {
+    console.log("👤 Попытка спавна игрока...")
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        // Пытаемся заспавнить игрока
+        await spawnPlayerNearWater(ids)
+        
+        // Даем движку время на обработку спавна
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
+        // Проверяем что игрок действительно заспавнился
+        const playerPos = noa.entities.getPosition(noa.playerEntity)
+        
+        if (playerPos && playerPos.length === 3) {
+            // Проверяем что позиция валидная (не NaN, не Infinity)
+            const [px, py, pz] = playerPos
+            if (
+                !isNaN(px) && !isNaN(py) && !isNaN(pz) &&
+                isFinite(px) && isFinite(py) && isFinite(pz) &&
+                py > -1000 && py < 1000 // Разумные границы по Y
+            ) {
+                console.log(`✅ Игрок заспавнен на позиции: [${px.toFixed(2)}, ${py.toFixed(2)}, ${pz.toFixed(2)}] (попытка ${attempt + 1})`)
+                return
+            }
+        }
+        
+        // Если спавн не удался, пробуем снова
+        if (attempt < maxAttempts - 1) {
+            console.log(`⚠️ Спавн не удался, повторная попытка ${attempt + 2}/${maxAttempts}...`)
+            updateLoadingText(`Spawning player... (attempt ${attempt + 2}/${maxAttempts})`)
+            await new Promise(resolve => setTimeout(resolve, delayMs))
+        }
+    }
+    
+    // Если все попытки не удались, пробуем принудительный спавн
+    console.warn("⚠️ Все попытки спавна не удались, пробуем принудительный спавн...")
+    forceSpawnPlayer(ids)
+    
+    // Проверяем еще раз после принудительного спавна
+    await new Promise(resolve => setTimeout(resolve, 200))
+    const playerPos = noa.entities.getPosition(noa.playerEntity)
+    if (playerPos && playerPos.length === 3) {
+        const [px, py, pz] = playerPos
+        if (!isNaN(px) && !isNaN(py) && !isNaN(pz)) {
+            console.log(`✅ Игрок заспавнен принудительно: [${px.toFixed(2)}, ${py.toFixed(2)}, ${pz.toFixed(2)}]`)
+            return
+        }
+    }
+    
+    console.error("❌ КРИТИЧЕСКАЯ ОШИБКА: Не удалось заспавнить игрока!")
+    throw new Error("Failed to spawn player after all attempts")
+}
+
+// =======================
+//   ПРИНУДИТЕЛЬНЫЙ СПАВН
+// =======================
+function forceSpawnPlayer(ids) {
+    // Пробуем спавн в нескольких известных безопасных местах
+    const safePositions = [
+        [0, 200, 0],      // Стартовая позиция из настроек
+        [0, 100, 0],      // Чуть ниже
+        [0, 50, 0],       // Еще ниже
+        [100, 200, 100], // Другая позиция
+        [-100, 200, -100], // Еще одна позиция
+    ]
+    
+    for (const [x, y, z] of safePositions) {
+        try {
+            noa.entities.setPosition(noa.playerEntity, [x, y, z])
+            const pos = noa.entities.getPosition(noa.playerEntity)
+            if (pos && pos.length === 3) {
+                console.log(`💪 Принудительный спавн на [${x}, ${y}, ${z}]`)
+                return
+            }
+        } catch (e) {
+            console.warn(`⚠️ Не удалось заспавнить на [${x}, ${y}, ${z}]:`, e)
+        }
+    }
+}
+
+// =======================
 //         СПАВН
 // =======================
 async function spawnPlayerNearWater(ids) {
@@ -234,36 +317,49 @@ async function spawnPlayerNearWater(ids) {
             const x = baseX + dx
             const z = baseZ + dz
 
-            const h = getHeightAt(x, z)
+            try {
+                const h = getHeightAt(x, z)
 
-            // проверяем воду на высоте h+1
-            const block = noa.getBlock(x, h + 1, z)
+                // проверяем воду на высоте h+1
+                const block = noa.getBlock(x, h + 1, z)
 
-            if (block === WATER) {
-                const d = dx * dx + dz * dz
-                if (d < bestDist) {
-                    bestDist = d
-                    best = { x, y: h + 4, z }
+                if (block === WATER) {
+                    const d = dx * dx + dz * dz
+                    if (d < bestDist) {
+                        bestDist = d
+                        best = { x, y: h + 4, z }
+                    }
                 }
+            } catch (e) {
+                // Игнорируем ошибки при проверке блоков
+                continue
             }
         }
     }
 
     if (best) {
         console.log("💧 Найдена вода, спавн:", best)
-        noa.entities.setPosition(noa.playerEntity, [
-            best.x + 0.5,
-            best.y,
-            best.z + 0.5
-        ])
+        try {
+            noa.entities.setPosition(noa.playerEntity, [
+                best.x + 0.5,
+                best.y,
+                best.z + 0.5
+            ])
+        } catch (e) {
+            console.warn("⚠️ Ошибка при установке позиции игрока:", e)
+        }
     } else {
         console.log("❌ ВОДА НЕ НАЙДЕНА, обычный спавн")
-        const y = getHeightAt(baseX, baseZ) + 3
-        noa.entities.setPosition(noa.playerEntity, [
-            baseX + 0.5,
-            y,
-            baseZ + 0.5
-        ])
+        try {
+            const y = getHeightAt(baseX, baseZ) + 3
+            noa.entities.setPosition(noa.playerEntity, [
+                baseX + 0.5,
+                y,
+                baseZ + 0.5
+            ])
+        } catch (e) {
+            console.warn("⚠️ Ошибка при установке позиции игрока:", e)
+        }
     }
 }
 
@@ -434,17 +530,18 @@ function setupInteraction(placeBlockID, blocksMap, waterID) {
         const dirY = -Math.sin(pitch)
         const dirZ = Math.cos(pitch) * Math.cos(yaw)
         
-        // Ищем ближайшую свинью в направлении взгляда (до 5 блоков)
+        // Ищем ближайшее животное в направлении взгляда (до 5 блоков)
         const maxDistance = 5.0
         let closestPig = null
+        let closestCow = null
         let closestDistance = maxDistance
         
+        // Проверяем свиней
         const pigs = getPigs()
         for (const pig of pigs) {
             const pigPos = noa.entities.getPosition(pig.id)
             if (!pigPos) continue
             
-            // Вектор от игрока к свинье
             const dx = pigPos[0] - playerPos[0]
             const dy = pigPos[1] - playerPos[1]
             const dz = pigPos[2] - playerPos[2]
@@ -452,46 +549,75 @@ function setupInteraction(placeBlockID, blocksMap, waterID) {
             
             if (distance > maxDistance) continue
             
-            // Проверяем, находится ли свинья в направлении взгляда
-            // Нормализуем вектор к свинье
             const normDx = dx / distance
             const normDy = dy / distance
             const normDz = dz / distance
             
-            // Скалярное произведение для проверки угла (должно быть близко к 1)
             const dot = dirX * normDx + dirY * normDy + dirZ * normDz
             
-            // Если свинья в конусе взгляда (угол < 45 градусов, dot > 0.7)
             if (dot > 0.7 && distance < closestDistance) {
                 closestDistance = distance
                 closestPig = pig
             }
         }
         
-        // Если нашли свинью, наносим урон
-        if (closestPig) {
-            // Проверяем, есть ли меч в руках
-            // @ts-ignore
-            const selectedItem = window.getSelectedItem ? window.getSelectedItem() : null
-            let damageMultiplier = 1.0 // Базовый урон
+        // Проверяем коров
+        closestDistance = maxDistance
+        const cows = getCows()
+        for (const cow of cows) {
+            const cowPos = noa.entities.getPosition(cow.id)
+            if (!cowPos) continue
             
-            if (selectedItem && selectedItem.name) {
-                const itemDef = getItemDefinition(selectedItem.name)
-                // @ts-ignore
-                if (itemDef.toolType === 'sword' && itemDef.damage) {
-                    // @ts-ignore
-                    damageMultiplier = itemDef.damage
-                }
+            const dx = cowPos[0] - playerPos[0]
+            const dy = cowPos[1] - playerPos[1]
+            const dz = cowPos[2] - playerPos[2]
+            const distance = Math.sqrt(dx * dx + dy * dy + dz * dz)
+            
+            if (distance > maxDistance) continue
+            
+            const normDx = dx / distance
+            const normDy = dy / distance
+            const normDz = dz / distance
+            
+            const dot = dirX * normDx + dirY * normDy + dirZ * normDz
+            
+            if (dot > 0.7 && distance < closestDistance) {
+                closestDistance = distance
+                closestCow = cow
             }
-            
-            // Наносим урон с учетом множителя
-            // damagePig наносит 1 урон, умножаем на множитель
+        }
+        
+        // Если нашли животное, наносим урон
+        // @ts-ignore
+        const selectedItem = window.getSelectedItem ? window.getSelectedItem() : null
+        let damageMultiplier = 1.0
+        
+        if (selectedItem && selectedItem.name) {
+            const itemDef = getItemDefinition(selectedItem.name)
+            // @ts-ignore
+            if (itemDef.toolType === 'sword' && itemDef.damage) {
+                // @ts-ignore
+                damageMultiplier = itemDef.damage
+            }
+        }
+        
+        // Атакуем свинью
+        if (closestPig) {
             for (let i = 0; i < Math.floor(damageMultiplier); i++) {
                 damagePig(noa, closestPig)
             }
-            // Если есть дробная часть, применяем с вероятностью
             if (damageMultiplier % 1 > 0 && Math.random() < (damageMultiplier % 1)) {
                 damagePig(noa, closestPig)
+            }
+        }
+        
+        // Атакуем корову
+        if (closestCow) {
+            for (let i = 0; i < Math.floor(damageMultiplier); i++) {
+                damageCow(noa, closestCow)
+            }
+            if (damageMultiplier % 1 > 0 && Math.random() < (damageMultiplier % 1)) {
+                damageCow(noa, closestCow)
             }
         }
     })

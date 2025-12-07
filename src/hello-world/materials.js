@@ -1,6 +1,7 @@
 // materials.js
 import { generateTextures } from "./texture_runtime_loader.js"
 import { Color3 } from '@babylonjs/core'
+import * as BABYLON from '@babylonjs/core'
 
 export async function initMaterialsAndBlocks(noa) {
     const tex = await generateTextures()
@@ -140,6 +141,54 @@ export function createPigMaterial(noa, size = 'normal') {
         material.diffuseColor = new Color3(1, 0.2, 0.2)
         material.emissiveColor = new Color3(0.3, 0.06, 0.06)
     }
+    
+    return material
+}
+
+// ------------------------------------------------------------
+// Материал для коров (белый с черными пятнами)
+// ------------------------------------------------------------
+export function createCowMaterial(noa) {
+    const material = noa.rendering.makeStandardMaterial()
+    const scene = noa.rendering.getScene()
+    
+    if (scene) {
+        // Создаем canvas для текстуры с черными пятнами
+        const canvas = document.createElement('canvas')
+        canvas.width = 256
+        canvas.height = 256
+        const ctx = canvas.getContext('2d')
+        
+        // Белый фон
+        ctx.fillStyle = '#FFFFFF'
+        ctx.fillRect(0, 0, 256, 256)
+        
+        // Черные пятна (случайные овалы, как у коровы)
+        ctx.fillStyle = '#000000'
+        const spots = [
+            { x: 50, y: 60, w: 40, h: 50 },
+            { x: 120, y: 80, w: 35, h: 45 },
+            { x: 180, y: 50, w: 45, h: 40 },
+            { x: 80, y: 150, w: 50, h: 55 },
+            { x: 160, y: 140, w: 40, h: 50 },
+            { x: 200, y: 180, w: 35, h: 40 },
+            { x: 30, y: 200, w: 45, h: 50 },
+        ]
+        
+        for (const spot of spots) {
+            ctx.beginPath()
+            ctx.ellipse(spot.x, spot.y, spot.w / 2, spot.h / 2, 0, 0, Math.PI * 2)
+            ctx.fill()
+        }
+        
+        // Создаем текстуру из canvas
+        const texture = new BABYLON.Texture(canvas.toDataURL(), scene)
+        material.diffuseTexture = texture
+    }
+    
+    // Базовый белый цвет
+    material.diffuseColor = new Color3(0.95, 0.95, 0.95)
+    material.emissiveColor = new Color3(0.1, 0.1, 0.1)
     
     return material
 }
