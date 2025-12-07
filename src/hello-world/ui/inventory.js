@@ -139,15 +139,43 @@ export function addItem(name, count = 1) {
   return false
 }
 
+// Функция для поиска следующего непустого слота
+function findNextNonEmptySlot(startIndex = 0) {
+  // Ищем начиная со следующего слота после startIndex
+  for (let i = 1; i < HOTBAR_SLOTS; i++) {
+    const idx = (startIndex + i) % HOTBAR_SLOTS
+    if (inventory[idx] && inventory[idx].count > 0) {
+      return idx
+    }
+  }
+  // Если не нашли, возвращаем null (все слоты пустые)
+  return null
+}
+
 // Удаление предмета из инвентаря (уменьшение количества или удаление)
 export function removeItem(slotIndex, count = 1) {
   if (slotIndex < 0 || slotIndex >= HOTBAR_SLOTS) return false
   if (!inventory[slotIndex]) return false
   
+  const wasSelectedSlot = slotIndex === selectedSlot
+  const itemName = inventory[slotIndex].name
+  
   inventory[slotIndex].count -= count
   
   if (inventory[slotIndex].count <= 0) {
     inventory[slotIndex] = null
+    
+    // Если это был выбранный слот и он стал пустым, переключаемся на следующий непустой
+    if (wasSelectedSlot) {
+      const nextSlot = findNextNonEmptySlot(slotIndex)
+      if (nextSlot !== null) {
+        selectedSlot = nextSlot
+        console.log(`🔄 Автоматическое переключение на слот ${nextSlot + 1} (${inventory[nextSlot].name})`)
+      } else {
+        // Все слоты пустые, оставляем выбранный слот как есть
+        console.log('📭 Все слоты пустые')
+      }
+    }
   }
   
   drawInventory()

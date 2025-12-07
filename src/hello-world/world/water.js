@@ -8,6 +8,7 @@ export function setWaterID(id) {
 
 // безопасно получаем noa из window (ты его туда кладёшь в index.js)
 function getNoa() {
+    // @ts-ignore
     return window.noa
 }
 

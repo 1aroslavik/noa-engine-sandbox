@@ -34,8 +34,11 @@ window.noa = noa
 // =======================
 async function start() {
     console.log("🚀 Старт: загрузка текстур и блоков")
+    updateLoadingText("Loading textures and blocks...")
 
     const ids = await initMaterialsAndBlocks(noa)
+    
+    updateLoadingText("Setting up world generation...")
 
     // установить ID воды
     setWaterID(ids.waterID)
@@ -53,13 +56,115 @@ async function start() {
     setupInteraction(grassBlock, ids.blocks, ids.waterID)
 
     // ======= СПАВН У ВОДЫ =======
+    updateLoadingText("Spawning player...")
     await spawnPlayerNearWater(ids)
+
+    // Проверяем что мир сгенерировался и ждем если нужно
+    await waitForWorldGeneration()
 
     // Скрываем окно загрузки после полной инициализации
     hideLoadingScreen()
 }
 
 start()
+
+// =======================
+//   ПРОВЕРКА ГЕНЕРАЦИИ МИРА
+// =======================
+async function waitForWorldGeneration(maxAttempts = 50, delayMs = 100) {
+    console.log("🌍 Проверка генерации мира...")
+    updateLoadingText("Verifying world generation...")
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const playerPos = noa.entities.getPosition(noa.playerEntity)
+        if (!playerPos) {
+            await new Promise(resolve => setTimeout(resolve, delayMs))
+            continue
+        }
+
+        const x = Math.floor(playerPos[0])
+        const y = Math.floor(playerPos[1])
+        const z = Math.floor(playerPos[2])
+
+        // Проверяем несколько блоков вокруг игрока
+        const checkPositions = [
+            [x, y - 1, z],      // под ногами
+            [x, y, z],          // на уровне игрока
+            [x + 1, y, z],      // рядом
+            [x - 1, y, z],      // рядом
+            [x, y, z + 1],      // рядом
+            [x, y, z - 1],      // рядом
+            [x, y - 2, z],      // глубже
+            [x, y - 3, z],      // еще глубже
+        ]
+
+        let hasSolidBlocks = false
+        let hasValidBlocks = false
+
+        for (const [bx, by, bz] of checkPositions) {
+            try {
+                const block = noa.getBlock(bx, by, bz)
+                // Если блок не undefined и не null, значит чанк загружен
+                if (block !== undefined && block !== null) {
+                    hasValidBlocks = true
+                    // Если есть хотя бы один не-воздушный блок, мир сгенерирован
+                    if (block !== 0) {
+                        hasSolidBlocks = true
+                        break
+                    }
+                }
+            } catch (e) {
+                // Игнорируем ошибки при проверке блоков
+            }
+        }
+
+        // Если нашли валидные блоки и хотя бы один твердый - мир готов
+        if (hasValidBlocks && hasSolidBlocks) {
+            console.log(`✅ Мир сгенерирован (попытка ${attempt + 1})`)
+            updateLoadingText("World ready!")
+            await new Promise(resolve => setTimeout(resolve, 200))
+            return
+        }
+
+        // Если чанки еще не загружены, принудительно запрашиваем их
+        if (!hasValidBlocks) {
+            // Принудительно запрашиваем загрузку чанков вокруг игрока
+            const chunkSize = 32 // Размер чанка из настроек движка
+            const chunkX = Math.floor(x / chunkSize) * chunkSize
+            const chunkZ = Math.floor(z / chunkSize) * chunkSize
+            
+            // Запрашиваем несколько чанков вокруг
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dz = -1; dz <= 1; dz++) {
+                    const cx = chunkX + dx * chunkSize
+                    const cz = chunkZ + dz * chunkSize
+                    // Проверяем блок в центре чанка, чтобы заставить его загрузиться
+                    try {
+                        noa.getBlock(cx + chunkSize / 2, y, cz + chunkSize / 2)
+                    } catch (e) {
+                        // Игнорируем ошибки
+                    }
+                }
+            }
+        }
+
+        if (attempt < maxAttempts - 1) {
+            await new Promise(resolve => setTimeout(resolve, delayMs))
+        }
+    }
+
+    console.warn("⚠️ Предупреждение: не удалось подтвердить генерацию мира, но продолжаем...")
+}
+
+// =======================
+//   ОБНОВЛЕНИЕ ТЕКСТА ЗАГРУЗКИ
+// =======================
+function updateLoadingText(text) {
+    const loadingText = document.querySelector('.loading-text')
+    if (loadingText) {
+        loadingText.textContent = text
+    }
+}
 
 // =======================
 //   СКРЫТИЕ ЗАГРУЗКИ
@@ -166,24 +271,45 @@ function setupInteraction(placeBlockID, blocksMap, waterID) {
             return 'log'
         }
         
-        // Блоки земли и травы - зависят от биома
         const biome = getBiome(x, z)
-        const isDirtOrGrass = 
-            blockName === 'dirt' ||
+        
+        // Блоки с ТРАВОЙ - размещаются как трава
+        const isGrassBlock = 
             blockName === 'grass' ||
             blockName === 'grass_top' ||
             blockName === 'grass_side' ||
-            blockName === 'grass_dry' ||
-            blockName === 'grass_dry_top' ||
-            blockName === 'grass_dry_side' ||
             blockName === 'tundra_grass' ||
             blockName === 'tundra_grass_top' ||
             blockName === 'tundra_grass_side' ||
+            blockName === 'grass_dry' ||
+            blockName === 'grass_dry_top' ||
+            blockName === 'grass_dry_side' ||
             blockName === 'snow_transition' ||
             blockName === 'snow_transition_side'
         
-        if (isDirtOrGrass) {
-            // Определяем название на основе биома
+        if (isGrassBlock) {
+            // Блоки с травой попадают в инвентарь как предметы, которые размещаются как трава
+            switch (biome) {
+                case 'plains':
+                case 'forest':
+                    return 'grass_block_plains' // Новый предмет для блоков с травой равнин
+                case 'tundra':
+                case 'snow':
+                case 'ice':
+                    return 'grass_block_tundra' // Новый предмет для блоков с травой тундры
+                case 'desert':
+                case 'red_desert':
+                case 'dry':
+                    return 'grass_block_desert' // Новый предмет для блоков с травой пустыни
+                case 'mountain':
+                    return 'grass_block_mountain' // Новый предмет для блоков с травой гор
+                default:
+                    return 'grass_block_plains'
+            }
+        }
+        
+        // Блоки ЗЕМЛИ (dirt) - размещаются как земля
+        if (blockName === 'dirt') {
             switch (biome) {
                 case 'plains':
                 case 'forest':
@@ -289,17 +415,27 @@ function setupInteraction(placeBlockID, blocksMap, waterID) {
 
     // Маппинг предметов на блоки для размещения
     const itemToBlockMap = {
-        'biome_block_plains': blocksMap['grass'] || blocksMap['grass_top'] || null,
-        'biome_block_tundra': blocksMap['tundra_grass'] || blocksMap['tundra_grass_top'] || null,
-        'biome_block_desert': blocksMap['grass_dry'] || blocksMap['grass_dry_top'] || null,
-        'biome_block_mountain': blocksMap['grass'] || blocksMap['grass_top'] || null,
-        'biome_block_hybrid': blocksMap['grass'] || blocksMap['grass_top'] || null,
-        // Можно размещать и обычную землю
+        // Блоки с ТРАВОЙ - размещаются как трава
+        'grass_block_plains': blocksMap['grass'] || null,
+        'grass_block_tundra': blocksMap['tundra_grass'] || null,
+        'grass_block_desert': blocksMap['grass_dry'] || null,
+        'grass_block_mountain': blocksMap['grass'] || null,
+        
+        // Блоки биомов (из крафта)
+        'biome_block_plains': blocksMap['grass'] || null,
+        'biome_block_tundra': blocksMap['tundra_grass'] || null,
+        'biome_block_desert': blocksMap['grass_dry'] || null,
+        'biome_block_mountain': blocksMap['grass'] || null,
+        'biome_block_hybrid': blocksMap['grass'] || null,
+        
+        // Блоки ЗЕМЛИ - размещаются как земля
         'dirt_plains': blocksMap['dirt'] || null,
         'dirt_tundra': blocksMap['dirt'] || null,
         'dirt_desert': blocksMap['dirt'] || null,
         'dirt_mountain': blocksMap['dirt'] || null,
         'dirt': blocksMap['dirt'] || null,
+        
+        // Остальные блоки
         'stone': blocksMap['stone'] || null,
         'sand': blocksMap['sand'] || null,
         'log': blocksMap['log'] || null,
