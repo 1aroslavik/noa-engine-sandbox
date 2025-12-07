@@ -74,7 +74,17 @@ export async function initMaterialsAndBlocks(noa) {
     make3("tundra_grass", "tundra_grass_top", "dirt", "tundra_grass_side")
 
     // ❄ ПЕРЕХОД СНЕГ → ЗЕМЛЯ (ТОЖЕ КАК ТРАВА)
-    make3("snow_transition", "snow_top", "dirt", "snow_transition_side")
+    make3("snow", "snow_top", "dirt", "snow_transition_side")
+// ❄ Обычный снеговый блок: все стороны snow_top
+if (materials["snow_top"]) {
+    blocks["snow_block"] = noa.registry.registerBlock(blockIdCounter++, {
+        material: [
+            materials["snow_top"], // top
+            materials["snow_top"], // bottom
+            materials["snow_top"]  // sides
+        ]
+    })
+}
 
     // ЛОГИ
     if (materials["log_top"] && materials["log_side"]) {

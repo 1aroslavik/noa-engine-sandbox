@@ -66,11 +66,12 @@ export function registerWorldGeneration(noa, ids) {
     const DESERT_ROCK = B["desert_rock"];
     const STONE  = B["stone"];
     const GRAVEL = B["gravel"];
+    const SNOW_BLOCK = B["snow_block"];
 
     const TUNDRA_TOP  = B["tundra_grass_top"];
     const TUNDRA_SIDE = B["tundra_grass_side"];
 
-    const SNOW       = B["snow_top"];
+    const SNOW = B["snow"]
     const SNOW_SIDE  = B["snow_side"];
     const ICE        = B["ice"];
 
@@ -80,6 +81,50 @@ export function registerWorldGeneration(noa, ids) {
     const GRASS_DRY_SIDE = B["grass_dry_side"];
 
     const WATER = ids.waterID;
+function carveSurfaceRavine(data, i, j, k, wx, wy, wz, height, biome) {
+
+    // работаем только на поверхности
+    if (wy !== height) return false;
+
+    // ---------- ПАРАМЕТРЫ ----------
+    const WIDTH = 3;              // ширина фиксированная
+    const DEPTH = 5;              // ГЛУБИНА строго ограничена
+    const SHAPE = 0.018;
+
+    // ---------- ШУМ ФОРМЫ ----------
+    const crack = Math.abs(_caveCrack(wx * SHAPE, wz * SHAPE));
+
+    // чем ниже, тем шире центральная зона
+    if (crack < 0.030) {
+
+        // центральная линия разлома
+        data.set(i, j, k, 0);
+
+        // ---------- РАСШИРЕНИЕ ----------
+        for (let dx = -WIDTH; dx <= WIDTH; dx++) {
+            for (let dz = -WIDTH; dz <= WIDTH; dz++) {
+
+                // ромбовидная форма
+                const d = Math.abs(dx) + Math.abs(dz);
+                if (d > WIDTH) continue;
+
+                // ---------- ГЛУБИНА СТРОГО ОГРАНИЧЕНА ----------
+                for (let dd = 1; dd <= DEPTH; dd++) {
+                    const yy = j - dd;
+
+                    // НЕ ОПУСКАЕМСЯ НИЖЕ ЧАНКА
+                    if (yy < 0) break;
+
+                    data.set(i + dx, yy, k + dz, 0);
+                }
+            }
+        }
+
+        return true;
+    }
+
+    return false;
+}
 
     noa.world.on("worldDataNeeded", (id, data, x, y, z) => {
 
@@ -124,14 +169,26 @@ export function registerWorldGeneration(noa, ids) {
                     // ADVANCED SURFACE FORMATIONS
                     // =====================================================
 
-                    function F(noise, wx, wz, scale) {
-                        return Math.abs(noise(wx * scale, wz * scale));
-                    }
+                   // ADVANCED SURFACE FORMATIONS
+
+// 1) Широкие безопасные разломы (новая система)
+if (y === 0) {
+    if (carveSurfaceRavine(data, i, j, k, wx, wy, wz, height, biome)) {
+        continue;
+    }
+}
+
+
+// старый noise F
+function F(noise, wx, wz, scale) {
+    return Math.abs(noise(wx * scale, wz * scale));
+}
+
 
                     // ============================
                     // РАЗЛОМЫ В ГОРАХ
                     // ============================
-                    if (wy === height && (biome === "mountain" || biome === "snow")) {
+if (y === 0 && wy === height && (biome === "mountain" || biome === "snow")) {
                         const mouth = F(_caveCrack, wx, wz, 0.018);
 
                         if (mouth < 0.045) {
@@ -149,28 +206,49 @@ export function registerWorldGeneration(noa, ids) {
                     // ============================
                     // КАРСТОВЫЕ ПРОВАЛЫ
                     // ============================
-                    if (wy === height && (biome === "plains" || biome === "forest")) {
-                        const sinkhole = F(_caveCheese, wx, wz, 0.012);
 
-                        if (sinkhole < 0.028) {
-                            data.set(i, j, k, 0);
-                            data.set(i, j-1, k, 0);
-                            data.set(i, j-2, k, 0);
+// =====================================================
+// ПЕЩЕРЫ — РЕДКИЕ И ТОЛЬКО ПОД ЗЕМЛЁЙ
+// =====================================================
+if (wy < height - 4) {   // больше безопасности сверху
 
-                            if (sinkhole < 0.018) {
-                                for (let dx = -1; dx <= 1; dx++)
-                                    for (let dz = -1; dz <= 1; dz++)
-                                        data.set(i+dx, j-1, k+dz, 0);
-                            }
+    // --- редкие сферические комнаты ---
+    const cave = Math.abs(_caveCheese(wx * 0.012, wz * 0.012));
+    // было < 0.045 → слишком часто
+    if (cave < 0.020) {   // РЕЖЕ в 2–3 раза
+        data.set(i, j, k, 0);
 
-                            continue;
-                        }
-                    }
+        // немного увеличим размер комнаты
+        if (Math.random() < 0.3) {
+            if (j + 1 < SY) data.set(i, j + 1, k, 0);
+        }
+
+        continue;
+    }
+
+    // --- редкие туннели ---
+    const worm =
+        Math.abs(_caveWormA(wx * 0.015, wz * 0.015)) +
+        Math.abs(_caveWormB(wx * 0.018, wz * 0.018)) * 0.5;
+
+    // было < 0.06 → слишком часто  
+    if (worm < 0.060) {   // реже в 2 раза
+        data.set(i, j, k, 0);
+
+        // чуть расширяем
+        if (Math.random() < 0.4) {
+            if (j - 1 >= 0) data.set(i, j - 1, k, 0);
+            if (j + 1 < SY) data.set(i, j + 1, k, 0);
+        }
+
+        continue;
+    }
+}
 
                     // ============================
                     // МЕЛКИЕ НОРЫ
                     // ============================
-                    if (wy === height) {
+if (y === 0 && wy === height) {
                         const hole = F(_caveWormA, wx, wz, 0.045);
 
                         if (hole < 0.034) {
@@ -204,7 +282,7 @@ export function registerWorldGeneration(noa, ids) {
                     // =====================================================
                     // ПОВЕРХНОСТНЫЕ УКРАШЕНИЯ (РАЗНООБРАЗИЕ)
                     // =====================================================
-                    if (wy === height) {
+if (y === 0 && wy === height) {
 
                         // Pebbles / Gravel patches (пятна гравия)
                         if (biome === "plains" || biome === "forest") {
@@ -338,7 +416,7 @@ export function registerWorldGeneration(noa, ids) {
                     // =====================================================
                     // ПОВЕРХНОСТЬ (БАЗОВАЯ)
                     // =====================================================
-                    if (wy === height) {
+                    if (y === 0 && wy === height) {
 
                         switch (biome) {
 
@@ -354,24 +432,33 @@ export function registerWorldGeneration(noa, ids) {
                                 data.set(i, j, k, TUNDRA_TOP);
                                 if (j > 0) data.set(i, j - 1, k, DIRT);
                                 continue;
-
                             case "snow":
-                                data.set(i, j, k, SNOW);
-                                if (j > 0) data.set(i, j - 1, k, SNOW_SIDE);
+
+                                // 20% плитки станут полноценными блоками снега
+                                if (Math.random() < 0.20) {
+                                    data.set(i, j, k, SNOW_BLOCK);   // ❄ плотный снег
+                                    continue;
+                                }
+
+                                // обычная поверхностная логика
+                                data.set(i, j, k, SNOW);             // верх — снег
+                                if (j > 0) data.set(i, j - 1, k, SNOW_TRANS); // переход
+                                if (j > 1) data.set(i, j - 2, k, DIRT);       // ниже земля
                                 continue;
 
-                            case "ice":
-                                // верх – лёд
-                                data.set(i, j, k, ICE);
 
-                                // 1 слой под льдом – снег
-                                if (j > 0) data.set(i, j - 1, k, );
+                                case "ice":
+                                    // верх — лёд
+                                    data.set(i, j, k, ICE);
 
-                                // 2–3 слой – плотный снег/земля (аналог packed snow)
-                                if (j > 1) data.set(i, j - 2, k, DIRT);
-                                if (j > 2) data.set(i, j - 3, k, DIRT);
+                                    // ❄ под льдом — снег (НЕ SNOW_TRANS!)
+                                    if (j > 0) data.set(i, j - 1, k, SNOW_BLOCK);
 
-                                continue;
+                                    // ниже — земля
+                                    if (j > 1) data.set(i, j - 2, k, DIRT);
+                                    if (j > 2) data.set(i, j - 3, k, DIRT);
+
+                                    continue;
 
 
                             case "dry":
