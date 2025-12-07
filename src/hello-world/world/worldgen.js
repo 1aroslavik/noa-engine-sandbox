@@ -71,7 +71,7 @@ export function registerWorldGeneration(noa, ids) {
     const TUNDRA_TOP  = B["tundra_grass_top"];
     const TUNDRA_SIDE = B["tundra_grass_side"];
 
-    const SNOW = B["snow"]
+    const SNOW = B["snow"];
     const SNOW_SIDE  = B["snow_side"];
     const ICE        = B["ice"];
 
@@ -91,6 +91,11 @@ export function registerWorldGeneration(noa, ids) {
         const SX = data.shape[0];
         const SY = data.shape[1];
         const SZ = data.shape[2];
+
+        // Универсальный шумовой фильтр для поверхностного декора
+        const F = (noise, x, z, scale) => {
+            return Math.abs(noise(x * scale, z * scale));
+        };
 
         for (let i = 0; i < SX; i++) {
             for (let k = 0; k < SZ; k++) {
@@ -128,17 +133,6 @@ export function registerWorldGeneration(noa, ids) {
                     // =====================================================
                     // ADVANCED SURFACE FORMATIONS
                     // =====================================================
-
-                   // ADVANCED SURFACE FORMATIONS
-
-
-
-// Универсальный шумовой фильтр для поверхностного декора
-function F(noise, x, z, scale) {
-    return Math.abs(noise(x * scale, z * scale));
-}
-
-
 
 // =====================================================
 // ДЕКОР БИОМОВ — БЕЗ ПЕЩЕР И РАЗЛОМОВ

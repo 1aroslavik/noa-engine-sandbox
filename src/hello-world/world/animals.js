@@ -697,9 +697,8 @@ function registerTickHandler() {
                 body.velocity[2] = 0
                 // Обновляем последнюю позицию
                 pig.lastPosition = [freeX, freeY, freeZ]
-                // Меняем направление, чтобы не застрять снова
-                pig.angle = Math.random() * Math.PI * 2
-                pig.targetAngle = pig.angle
+                // Меняем направление, чтобы не застрять снова (голова повернется сама)
+                pig.targetAngle = Math.random() * Math.PI * 2
             } else {
                 // Если не нашли место, выталкиваем вверх и в случайную сторону
                 const pushAngle = Math.random() * Math.PI * 2
@@ -710,8 +709,7 @@ function registerTickHandler() {
                 const newPos = [pos[0], pos[1] + 2, pos[2]]
                 currentNoa.entities.setPosition(id, newPos)
                 pig.lastPosition = [newPos[0], newPos[1], newPos[2]]
-                // Меняем направление
-                pig.angle = pushAngle
+                // Меняем направление (голова повернется сама)
                 pig.targetAngle = pushAngle
             }
             continue
@@ -730,28 +728,35 @@ function registerTickHandler() {
         // Периодическая смена направления (каждые 3-8 секунд)
         if (pig.directionChangeTimer <= 0) {
             pig.targetAngle = Math.random() * Math.PI * 2
-            pig.angle = pig.targetAngle // Сразу обновляем угол движения
             pig.directionChangeTimer = 180 + Math.floor(Math.random() * 300) // 3-8 секунд
         }
 
-        // Плавная интерполяция угла поворота к целевому углу движения
-        // Это обеспечивает плавный поворот головы в направлении движения
-        const targetRotation = pig.angle - Math.PI / 2
+        // Плавная интерполяция угла поворота головы к целевому углу движения
+        // В Babylon.js: rotation.y = 0 означает смотрение вперед по +Z
+        // targetAngle - это угол движения (0 = вперед по +Z, π/2 = влево по -X, и т.д.)
+        // targetRotation = targetAngle - π/2 (преобразуем угол движения в угол поворота меша)
+        const targetRotation = pig.targetAngle - Math.PI / 2
         let angleDiff = targetRotation - pig.currentRotation
         
         // Нормализуем разницу углов в диапазон [-π, π]
         while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
         while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
         
-        // Плавная интерполяция с коэффициентом 0.15 (можно настроить для скорости поворота)
-        const rotationSpeed = 0.15
+        // Плавная интерполяция с коэффициентом 0.3 (быстрее поворот)
+        const rotationSpeed = 0.3
         pig.currentRotation += angleDiff * rotationSpeed
         
         // Применяем поворот к мешу - голова теперь будет плавно поворачиваться
         mesh.rotation.y = pig.currentRotation
         
+        // Обновляем угол движения только когда голова достаточно повернута
+        if (Math.abs(angleDiff) < 0.2) {
+            pig.angle = pig.targetAngle
+        }
+        
         // Упрощенная проверка препятствий - только для прыжков
         // Используем текущий угол поворота для проверки препятствий впереди
+        // Используем ту же формулу, что и для движения
         const currentMovementAngle = pig.currentRotation + Math.PI / 2
         if (under !== 0 && Math.abs(body.velocity[1]) < 0.1) {
             const checkDistance = 0.4
@@ -777,33 +782,31 @@ function registerTickHandler() {
                         body.velocity[2] = Math.sin(currentMovementAngle) * pig.speed * 2
                         pig.jumpCooldown = 30
                     } else {
-                        // Не можем перепрыгнуть - меняем направление плавно
+                        // Не можем перепрыгнуть - меняем направление (голова повернется сама)
                         pig.targetAngle = Math.random() * Math.PI * 2
-                        pig.angle = pig.targetAngle
                         pig.directionChangeTimer = 15
                     }
                 }
             }
         }
         
-        // Движение - используем текущий угол поворота для направления движения
-        // Конвертируем текущий угол поворота меша обратно в угол движения
-        // rotation.y = angle - π/2, значит angle = rotation.y + π/2
+        // Движение - ВСЕГДА в направлении головы (куда смотрит голова)
+        // Используем targetAngle напрямую для движения (когда голова достаточно повернута)
+        // Или currentRotation + π/2 для плавного поворота
+        // Формула: movementAngle = currentRotation + π/2 (направление головы)
         const movementAngle = pig.currentRotation + Math.PI / 2
         const moveSpeed = pig.speed * 4
         
-        // Проверяем, стоим ли на земле (более надежная проверка)
-        // Используем более мягкую проверку - если есть блок под ногами ИЛИ скорость вниз небольшая
+        // Проверяем, стоим ли на земле
         const isOnGround = under !== 0 || (body.velocity[1] >= -0.1 && body.velocity[1] < 0.3)
         
         if (isOnGround) {
-            // Движемся в направлении, куда смотрит голова (текущий угол поворота)
-            // Это обеспечивает, что свинья движется вперед, а не боком
-            // Используем только velocity - физика сама обработает движение
+            // Идем строго вперед в направлении головы
+            // Формула для движения: X = cos(angle), Z = sin(angle)
             body.velocity[0] = Math.cos(movementAngle) * moveSpeed
             body.velocity[2] = Math.sin(movementAngle) * moveSpeed
         } else {
-            // Падаем - не двигаемся горизонтально, но сохраняем небольшое движение для контроля
+            // Падаем - замедляем горизонтальное движение
             body.velocity[0] *= 0.9
             body.velocity[2] *= 0.9
         }
@@ -911,8 +914,8 @@ function registerTickHandler() {
                 body.velocity[1] = 0
                 body.velocity[2] = 0
                 cow.lastPosition = [freeX, freeY, freeZ]
-                cow.angle = Math.random() * Math.PI * 2
-                cow.targetAngle = cow.angle
+                // Меняем направление (голова повернется сама)
+                cow.targetAngle = Math.random() * Math.PI * 2
             } else {
                 const pushAngle = Math.random() * Math.PI * 2
                 body.velocity[1] = 0.8
@@ -921,8 +924,7 @@ function registerTickHandler() {
                 const newPos = [pos[0], pos[1] + 2, pos[2]]
                 currentNoa.entities.setPosition(id, newPos)
                 cow.lastPosition = [newPos[0], newPos[1], newPos[2]]
-                cow.angle = pushAngle
-                cow.targetAngle = pushAngle
+                cow.targetAngle = pushAngle // Голова повернется сама
             }
             continue
         }
@@ -937,20 +939,25 @@ function registerTickHandler() {
 
         if (cow.directionChangeTimer <= 0) {
             cow.targetAngle = Math.random() * Math.PI * 2
-            cow.angle = cow.targetAngle
             cow.directionChangeTimer = 180 + Math.floor(Math.random() * 300)
         }
 
-        const targetRotation = cow.angle - Math.PI / 2
+        // Плавная интерполяция угла поворота головы к целевому углу движения
+        const targetRotation = cow.targetAngle - Math.PI / 2
         let angleDiff = targetRotation - cow.currentRotation
         
         while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
         while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
         
-        const rotationSpeed = 0.15
+        const rotationSpeed = 0.3
         cow.currentRotation += angleDiff * rotationSpeed
         
         mesh.rotation.y = cow.currentRotation
+        
+        // Обновляем угол движения только когда голова достаточно повернута
+        if (Math.abs(angleDiff) < 0.2) {
+            cow.angle = cow.targetAngle
+        }
         
         const currentMovementAngle = cow.currentRotation + Math.PI / 2
         if (under !== 0 && Math.abs(body.velocity[1]) < 0.1) {
@@ -973,23 +980,28 @@ function registerTickHandler() {
                         body.velocity[2] = Math.sin(currentMovementAngle) * cow.speed * 2
                         cow.jumpCooldown = 30
                     } else {
+                        // Не можем перепрыгнуть - меняем направление (голова повернется сама)
                         cow.targetAngle = Math.random() * Math.PI * 2
-                        cow.angle = cow.targetAngle
                         cow.directionChangeTimer = 15
                     }
                 }
             }
         }
         
+        // Движение - ВСЕГДА в направлении головы (куда смотрит голова)
+        // Используем ту же формулу, что и для свиней
         const movementAngle = cow.currentRotation + Math.PI / 2
         const moveSpeed = cow.speed * 4
         
         const isOnGround = under !== 0 || (body.velocity[1] >= -0.1 && body.velocity[1] < 0.3)
         
         if (isOnGround) {
+            // Идем строго вперед в направлении головы
+            // Используем ту же формулу, что и для прыжков (cos для X, sin для Z)
             body.velocity[0] = Math.cos(movementAngle) * moveSpeed
             body.velocity[2] = Math.sin(movementAngle) * moveSpeed
         } else {
+            // Падаем - замедляем горизонтальное движение
             body.velocity[0] *= 0.9
             body.velocity[2] *= 0.9
         }
@@ -1066,30 +1078,51 @@ export function generateAnimalsInChunk(noa, ids, x0, y0, z0) {
     const scene = noa.rendering.getScene()
     if (!scene) return // сцена ещё не готова
 
-    // Генерируем больше животных в чанке
-    const animalCount = 3 + Math.floor(Math.random() * 4) // 3-6 попыток спавна на чанк
+    // Генерируем животных в чанке (уменьшил количество попыток)
+    const animalCount = 2 + Math.floor(Math.random() * 3) // 2-4 попытки спавна на чанк
+    
+    // Список уже заспавненных позиций в этом чанке (чтобы не спавнить слишком близко)
+    const spawnedPositions = []
 
     for (let i = 0; i < animalCount; i++) {
         const x = x0 + Math.floor(Math.random() * 32)
         const z = z0 + Math.floor(Math.random() * 32)
         const y = getHeightAt(x, z)
         const biome = getBiome(x, z)
+        
+        // Проверяем, что нет других животных слишком близко (минимум 3 блока)
+        let tooClose = false
+        for (const [sx, sz] of spawnedPositions) {
+            const dx = x - sx
+            const dz = z - sz
+            const dist = Math.sqrt(dx * dx + dz * dz)
+            if (dist < 3) {
+                tooClose = true
+                break
+            }
+        }
+        
+        if (tooClose) continue // Пропускаем эту позицию
 
-        // Спавним свинок в подходящих биомах (расширили список)
+        // Спавним свинок в подходящих биомах
         if (biome === "plains" || biome === "forest" || biome === "dry") {
-            if (Math.random() < 0.6) { // 60% шанс спавна (было 30%)
-                // Случайно выбираем размер: 50% маленькие, 50% стандартные
+            if (Math.random() < 0.4) { // 40% шанс спавна (уменьшил с 60%)
                 const size = Math.random() < 0.5 ? 'small' : 'normal'
-                createPig(noa, scene, x, z, y, size)
+                const result = createPig(noa, scene, x, z, y, size)
+                if (result) {
+                    spawnedPositions.push([x, z]) // Запоминаем позицию
+                }
             }
         }
         
         // Спавним коров в тех же биомах, что и свиньи
         if (biome === "plains" || biome === "forest" || biome === "dry") {
-            if (Math.random() < 0.5) { // 50% шанс спавна коровы (было 20%)
-                // Случайно выбираем размер: 50% маленькие, 50% стандартные
+            if (Math.random() < 0.3) { // 30% шанс спавна коровы (уменьшил с 50%)
                 const size = Math.random() < 0.5 ? 'small' : 'normal'
-                createCow(noa, scene, x, z, y, size)
+                const result = createCow(noa, scene, x, z, y, size)
+                if (result) {
+                    spawnedPositions.push([x, z]) // Запоминаем позицию
+                }
             }
         }
     }
