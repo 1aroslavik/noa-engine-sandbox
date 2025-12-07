@@ -12,6 +12,7 @@ import {
     _caveWormB,
     _caveCrack
 } from "../biome.js";
+import { generatePlantsInChunk } from "./plants.js"
 
 import { generateTreesInChunk } from "./trees.js";
 import { generateAnimalsInChunk } from "./animals.js";
@@ -440,6 +441,7 @@ if (biome === "tundra" && wy < height - 4 && wy > height - 10) {
         if (y === 0) {
             generateTreesInChunk(noa, ids, x, y, z);
             generateAnimalsInChunk(noa, ids, x, y, z);
+            
         }
     });
     
