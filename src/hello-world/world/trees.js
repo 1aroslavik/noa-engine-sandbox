@@ -10,6 +10,38 @@ function B(noa, id, x, y, z) {
 function rand(a, b) {
     return a + Math.floor(Math.random() * (b - a + 1))
 }
+import { getWaterLevel } from "./worldgen.js"
+
+// Проверка места для дерева
+function isGoodTreeSpot(noa, ids, x, y, z) {
+
+    const blocks = ids.blocks
+
+    const waterY = getWaterLevel(x, z)
+
+    // 1) земля ДОЛЖНА быть выше уровня воды
+    if (waterY !== -999 && y <= waterY) return false
+
+    // 2) блок под деревом
+    const ground = noa.getBlock(x, y, z)
+
+    const badBlocks = [
+        ids.waterID,
+        blocks["ice"],
+        blocks["snow_side"],
+        blocks["sand"],            // можно убрать если хочешь пальмы на пляже
+        blocks["snow_top"],
+        0                          // воздух — нельзя
+    ]
+
+    if (badBlocks.includes(ground)) return false
+
+    // 3) не должно быть воды над землёй
+    const top = noa.getBlock(x, y+1, z)
+    if (top === ids.waterID) return false
+
+    return true
+}
 
 /* ========================================================================
                               🌳 ДУБ
