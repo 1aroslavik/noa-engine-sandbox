@@ -83,33 +83,10 @@ const GRASS_PLANT = ids.grassID;   // новый растительный бло
 
     const WATER = ids.waterID;
 
-    // Отслеживаем генерацию чанков для проверки готовности
-    let generatedChunksCount = 0
-    const generatedChunks = new Set()
-    
-    // Функция для получения ключа чанка
-    const getChunkKey = (x, y, z) => `${Math.floor(x/32)}_${y}_${Math.floor(z/32)}`
-    
-    // Экспортируем счетчик для проверки
-    // @ts-ignore
-    if (typeof window !== 'undefined') {
-        // @ts-ignore
-        window.__worldGenChunksCount = () => generatedChunksCount
-        // @ts-ignore
-        window.__worldGenHasChunk = (x, y, z) => generatedChunks.has(getChunkKey(x, y, z))
-    }
-    
     noa.world.on("worldDataNeeded", (id, data, x, y, z) => {
-        // Отслеживаем генерацию чанков
-        const chunkKey = getChunkKey(x, y, z)
-        if (!generatedChunks.has(chunkKey)) {
-            generatedChunks.add(chunkKey)
-            generatedChunksCount++
-            
-            // Логируем только первые несколько чанков для отладки
-            if (y === 0 && (Math.abs(x) < 100 && Math.abs(z) < 100)) {
-                console.log(`🌍 Генерация чанка: x=${x}, y=${y}, z=${z}, id=${id} (всего: ${generatedChunksCount})`)
-            }
+        // Логируем только первые несколько чанков для отладки
+        if (y === 0 && (Math.abs(x) < 100 && Math.abs(z) < 100)) {
+            console.log(`🌍 Генерация чанка: x=${x}, y=${y}, z=${z}, id=${id}`)
         }
 
         const SX = data.shape[0];

@@ -52,9 +52,8 @@ async function start() {
 
     registerWorldGeneration(noa, ids)
     
-    // Даем движку больше времени на регистрацию обработчика генерации
-    // Увеличено для медленных систем (Windows и т.д.)
-    await new Promise(resolve => setTimeout(resolve, 500))
+    // Даем движку время на регистрацию обработчика генерации
+    await new Promise(resolve => setTimeout(resolve, 200))
     
     // Проверяем что движок готов
     if (!noa.world) {
@@ -92,10 +91,9 @@ async function start() {
     updateLoadingText("Spawning player...")
     await waitForPlayerSpawn(ids)
     
-    // Даем движку больше времени на обработку спавна и начало загрузки чанков
-    // Увеличено для медленных систем (Windows и т.д.)
+    // Даем движку время на обработку спавна и начало загрузки чанков
     updateLoadingText("Preparing world...")
-    await new Promise(resolve => setTimeout(resolve, 800))
+    await new Promise(resolve => setTimeout(resolve, 300))
 
     // Проверяем что мир сгенерировался и ждем если нужно
     await waitForWorldGeneration()
@@ -109,16 +107,8 @@ start()
 // =======================
 //   ПРОВЕРКА ГОТОВНОСТИ ДВИЖКА
 // =======================
-async function waitForEngineReady(maxAttempts = 80, delayMs = 150) {
+async function waitForEngineReady(maxAttempts = 30, delayMs = 100) {
     console.log("🔧 Проверка готовности движка...")
-    
-    // Для медленных систем увеличиваем таймауты
-    const isSlowSystem = navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4
-    if (isSlowSystem) {
-        console.log("🐌 Медленная система обнаружена, увеличиваем таймауты инициализации")
-        delayMs = 200
-        maxAttempts = 100
-    }
     
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         // Проверяем основные компоненты движка
@@ -158,19 +148,12 @@ async function waitForEngineReady(maxAttempts = 80, delayMs = 150) {
 // =======================
 //   ПРОВЕРКА ГЕНЕРАЦИИ МИРА
 // =======================
-async function waitForWorldGeneration(maxAttempts = 200, delayMs = 150) {
+async function waitForWorldGeneration(maxAttempts = 80, delayMs = 120) {
     console.log("🌍 Проверка генерации мира...")
     updateLoadingText("Verifying world generation...")
     
-    const chunkSize = 32 // Размер чанка из настроек движка
-    
-    // Для медленных систем увеличиваем начальные задержки
-    const isSlowSystem = navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4
-    if (isSlowSystem) {
-        console.log("🐌 Обнаружена медленная система, увеличиваем таймауты")
-        delayMs = 200
-        maxAttempts = 250
-    }
+    // Даем движку начальное время на генерацию перед первой проверкой
+    await new Promise(resolve => setTimeout(resolve, 300))
     
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const playerPos = noa.entities.getPosition(noa.playerEntity)
@@ -183,179 +166,102 @@ async function waitForWorldGeneration(maxAttempts = 200, delayMs = 150) {
         const y = Math.floor(playerPos[1])
         const z = Math.floor(playerPos[2])
 
-        // Принудительно запрашиваем загрузку чанков вокруг игрока на каждой итерации
-        // Это гарантирует, что движок попытается загрузить чанки
-        const chunkX = Math.floor(x / chunkSize) * chunkSize
-        const chunkZ = Math.floor(z / chunkSize) * chunkSize
-        
-        // Увеличиваем радиус запроса чанков для более агрессивной загрузки
-        const radius = attempt < 20 ? 3 : 2 // Первые 20 попыток - больший радиус
-        
-        // Запрашиваем чанки в радиусе вокруг игрока
-        for (let dx = -radius; dx <= radius; dx++) {
-            for (let dz = -radius; dz <= radius; dz++) {
-                const cx = chunkX + dx * chunkSize
-                const cz = chunkZ + dz * chunkSize
-                
-                // Проверяем блоки в разных частях чанка, чтобы заставить его загрузиться
-                const testPositions = [
-                    [cx + chunkSize / 2, y, cz + chunkSize / 2], // центр
-                    [cx, y, cz], // угол
-                    [cx + chunkSize - 1, y, cz + chunkSize - 1], // противоположный угол
-                    [cx + chunkSize / 2, y - 5, cz + chunkSize / 2], // ниже
-                    [cx + chunkSize / 2, y - 10, cz + chunkSize / 2], // еще ниже
-                ]
-                
-                for (const [tx, ty, tz] of testPositions) {
-                    try {
-                        noa.getBlock(tx, ty, tz)
-                        // Также проверяем блоки ниже
-                        noa.getBlock(tx, ty - 1, tz)
-                        noa.getBlock(tx, ty - 2, tz)
-                    } catch (e) {
-                        // Игнорируем ошибки
+        // Простая проверка: запрашиваем блоки под ногами игрока
+        // Это заставит движок загрузить чанк если он еще не загружен
+        const checkPositions = [
+            [x, y - 1, z],      // под ногами
+            [x, y - 2, z],      // глубже
+            [x, y - 3, z],      // еще глубже
+            [x, y - 4, z],      // еще глубже
+            [x, y - 5, z],      // еще глубже
+        ]
+
+        let hasSolidBlocks = false
+        let validBlockCount = 0
+
+        // Запрашиваем и проверяем блоки одновременно
+        for (const [bx, by, bz] of checkPositions) {
+            try {
+                const block = noa.getBlock(bx, by, bz)
+                if (block !== undefined && block !== null) {
+                    validBlockCount++
+                    if (block !== 0) {
+                        hasSolidBlocks = true
+                        // Если нашли хотя бы один твердый блок - сразу выходим
+                        break
                     }
                 }
+            } catch (e) {
+                // Игнорируем ошибки - это нормально если чанк еще не загружен
             }
         }
-        
-        // Даем движку больше времени обработать запросы
-        // Для медленных систем и первых попыток - больше времени
-        let processDelay = attempt < 20 ? 200 : 100
-        if (isSlowSystem) {
-            processDelay = attempt < 30 ? 300 : 150
-        }
-        await new Promise(resolve => setTimeout(resolve, processDelay))
 
-        // Проверяем количество сгенерированных чанков (если доступно)
-        // @ts-ignore
-        const chunksGenerated = window.__worldGenChunksCount ? window.__worldGenChunksCount() : 0
-        const chunkKey = `${Math.floor(x/32)}_0_${Math.floor(z/32)}`
-        // @ts-ignore
-        const hasChunk = window.__worldGenHasChunk ? window.__worldGenHasChunk(x, 0, z) : false
-        
-        // Если чанк уже сгенерирован, проверяем блоки
-        if (hasChunk || chunksGenerated > 0) {
-            // Проверяем несколько блоков вокруг игрока
-            const checkPositions = [
-                [x, y - 1, z],      // под ногами
-                [x, y - 2, z],      // глубже под ногами
-                [x, y - 3, z],      // еще глубже
-                [x, y - 4, z],      // еще глубже
-                [x + 1, y - 1, z],  // рядом под ногами
-                [x - 1, y - 1, z],  // рядом под ногами
-                [x, y - 1, z + 1],  // рядом под ногами
-                [x, y - 1, z - 1],  // рядом под ногами
-            ]
-
-            let hasSolidBlocks = false
-            let hasValidBlocks = false
-            let validBlockCount = 0
-
-            for (const [bx, by, bz] of checkPositions) {
-                try {
-                    const block = noa.getBlock(bx, by, bz)
-                    // Если блок не undefined и не null, значит чанк загружен
-                    if (block !== undefined && block !== null) {
-                        hasValidBlocks = true
-                        validBlockCount++
-                        // Если есть хотя бы один не-воздушный блок, мир сгенерирован
-                        if (block !== 0) {
-                            hasSolidBlocks = true
-                        }
-                    }
-                } catch (e) {
-                    // Игнорируем ошибки при проверке блоков
-                }
-            }
-
-            // Если нашли достаточно валидных блоков и хотя бы один твердый - мир готов
-            if (hasValidBlocks && hasSolidBlocks && validBlockCount >= 3) {
-                console.log(`✅ Мир сгенерирован (попытка ${attempt + 1}, проверено блоков: ${validBlockCount}, чанков: ${chunksGenerated})`)
-                updateLoadingText("World ready!")
-                await new Promise(resolve => setTimeout(resolve, 200))
-                return
-            }
-        } else if (chunksGenerated === 0 && attempt > 10) {
-            // Если после 10 попыток еще нет сгенерированных чанков, это проблема
-            console.warn(`⚠️ После ${attempt + 1} попыток еще нет сгенерированных чанков`)
+        // Если нашли хотя бы один твердый блок - мир готов
+        if (hasSolidBlocks) {
+            console.log(`✅ Мир сгенерирован (попытка ${attempt + 1}, проверено блоков: ${validBlockCount})`)
+            updateLoadingText("World ready!")
+            await new Promise(resolve => setTimeout(resolve, 100))
+            return
         }
 
-        // Обновляем текст загрузки с прогрессом
-        if (attempt % 10 === 0) {
-            // @ts-ignore
-            const chunksCount = window.__worldGenChunksCount ? window.__worldGenChunksCount() : 0
-            updateLoadingText(`Verifying world generation... (${attempt + 1}/${maxAttempts}, chunks: ${chunksCount})`)
+        // Обновляем текст загрузки реже
+        if (attempt % 20 === 0 && attempt > 0) {
+            updateLoadingText("Verifying world generation...")
         }
 
-        if (attempt < maxAttempts - 1) {
-            await new Promise(resolve => setTimeout(resolve, delayMs))
-        }
+        // Даем движку время обработать запросы
+        // Увеличиваем задержку для первых попыток, чтобы дать время на генерацию
+        const currentDelay = attempt < 10 ? delayMs * 1.5 : delayMs
+        await new Promise(resolve => setTimeout(resolve, currentDelay))
     }
 
-    // Если не удалось подтвердить генерацию, пробуем еще раз с более агрессивной загрузкой
-    console.warn("⚠️ Первая попытка не удалась, пробуем более агрессивную загрузку...")
-    updateLoadingText("Force loading world chunks...")
+    // Если не удалось подтвердить, пробуем еще раз с более длительным ожиданием
+    console.warn("⚠️ Первая проверка не удалась, пробуем еще раз с увеличенным временем ожидания...")
+    updateLoadingText("Loading world...")
     
-    // Последняя попытка - очень агрессивная загрузка
     const playerPos = noa.entities.getPosition(noa.playerEntity)
     if (playerPos) {
         const x = Math.floor(playerPos[0])
         const y = Math.floor(playerPos[1])
         const z = Math.floor(playerPos[2])
-        const chunkX = Math.floor(x / chunkSize) * chunkSize
-        const chunkZ = Math.floor(z / chunkSize) * chunkSize
         
-        // Запрашиваем все чанки в большом радиусе
-        for (let dx = -4; dx <= 4; dx++) {
-            for (let dz = -4; dz <= 4; dz++) {
-                const cx = chunkX + dx * chunkSize
-                const cz = chunkZ + dz * chunkSize
-                
-                // Множественные запросы блоков в каждом чанке
-                for (let i = 0; i < 5; i++) {
-                    const tx = cx + Math.floor(Math.random() * chunkSize)
-                    const ty = y - Math.floor(Math.random() * 20)
-                    const tz = cz + Math.floor(Math.random() * chunkSize)
-                    try {
-                        noa.getBlock(tx, ty, tz)
-                    } catch (e) {
-                        // Игнорируем ошибки
-                    }
-                }
-            }
-        }
+        // Даем больше времени на генерацию перед проверкой
+        await new Promise(resolve => setTimeout(resolve, 500))
         
-        // Даем больше времени на обработку (еще больше для медленных систем)
-        const finalDelay = isSlowSystem ? 1000 : 700
-        await new Promise(resolve => setTimeout(resolve, finalDelay))
-        
-        // Финальная проверка
-        let finalCheck = false
-        for (let i = 0; i < 10; i++) {
-            const checkY = y - i
+        // Проверяем блоки под ногами несколько раз с увеличенными задержками
+        for (let i = 0; i < 15; i++) {
+            // Запрашиваем блоки, чтобы заставить движок их сгенерировать
             try {
-                const block = noa.getBlock(x, checkY, z)
+                noa.getBlock(x, y - 1, z)
+                noa.getBlock(x, y - 2, z)
+                noa.getBlock(x, y - 3, z)
+                noa.getBlock(x, y - 4, z)
+                noa.getBlock(x, y - 5, z)
+            } catch (e) {
+                // Игнорируем ошибки - это нормально
+            }
+            
+            // Даем время на обработку
+            await new Promise(resolve => setTimeout(resolve, 150))
+            
+            // Проверяем результат
+            try {
+                const block = noa.getBlock(x, y - 1, z)
                 if (block !== undefined && block !== null && block !== 0) {
-                    console.log(`✅ Мир сгенерирован после принудительной загрузки (блок на y=${checkY})`)
-                    finalCheck = true
-                    break
+                    console.log(`✅ Мир сгенерирован после повторной проверки (попытка ${i + 1})`)
+                    updateLoadingText("World ready!")
+                    await new Promise(resolve => setTimeout(resolve, 100))
+                    return
                 }
             } catch (e) {
-                // Игнорируем ошибки
+                // Продолжаем попытки
             }
-        }
-        
-        if (finalCheck) {
-            updateLoadingText("World ready!")
-            await new Promise(resolve => setTimeout(resolve, 200))
-            return
         }
     }
     
-    console.warn("⚠️ Предупреждение: не удалось подтвердить генерацию мира после всех попыток")
-    console.warn("⚠️ Продолжаем загрузку, но мир может быть не полностью сгенерирован")
-    console.warn("⚠️ Мир будет генерироваться по мере необходимости во время игры")
+    console.warn("⚠️ Не удалось подтвердить генерацию после всех попыток")
+    console.warn("⚠️ Продолжаем загрузку - мир будет генерироваться по мере необходимости во время игры")
+    console.warn("⚠️ Это нормально для медленных систем, игра должна работать корректно")
 }
 
 // =======================
@@ -385,24 +291,15 @@ function hideLoadingScreen() {
 // =======================
 //   ПРОВЕРКА СПАВНА ИГРОКА
 // =======================
-async function waitForPlayerSpawn(ids, maxAttempts = 30, delayMs = 250) {
+async function waitForPlayerSpawn(ids, maxAttempts = 15, delayMs = 150) {
     console.log("👤 Попытка спавна игрока...")
-    
-    // Для медленных систем увеличиваем таймауты
-    const isSlowSystem = navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4
-    if (isSlowSystem) {
-        console.log("🐌 Медленная система обнаружена, увеличиваем таймауты спавна")
-        delayMs = 350
-        maxAttempts = 40
-    }
     
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         // Пытаемся заспавнить игрока
         await spawnPlayerNearWater(ids)
         
-        // Даем движку время на обработку спавна (больше для медленных систем)
-        const spawnDelay = isSlowSystem ? 200 : 150
-        await new Promise(resolve => setTimeout(resolve, spawnDelay))
+        // Даем движку время на обработку спавна
+        await new Promise(resolve => setTimeout(resolve, 100))
         
         // Проверяем что игрок действительно заспавнился
         const playerPos = noa.entities.getPosition(noa.playerEntity)

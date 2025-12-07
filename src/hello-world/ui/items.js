@@ -49,6 +49,20 @@ export const ITEM_DEFINITIONS = {
     craftDifficulty: CRAFT_DIFFICULTY.TRIVIAL,
     description: 'Сырое мясо'
   },
+  'pig_meat': {
+    name: 'pig_meat',
+    rarity: RARITY.COMMON,
+    type: MATERIAL_TYPE.ORGANIC,
+    craftDifficulty: CRAFT_DIFFICULTY.TRIVIAL,
+    description: 'Мясо свиньи'
+  },
+  'cow_meat': {
+    name: 'cow_meat',
+    rarity: RARITY.COMMON,
+    type: MATERIAL_TYPE.ORGANIC,
+    craftDifficulty: CRAFT_DIFFICULTY.TRIVIAL,
+    description: 'Мясо коровы'
+  },
   'log': {
     name: 'log',
     rarity: RARITY.COMMON,
@@ -388,6 +402,9 @@ export function getShortName(itemName) {
   
   // Маппинг полных названий на короткие версии
   const shortNames = {
+    'meat': 'Meat',
+    'pig_meat': 'PigMeat',
+    'cow_meat': 'CowMeat',
     'iron_ingot': 'Iron',
     'gold_ingot': 'Gold',
     'andesite': 'Andes',

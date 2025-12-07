@@ -1026,11 +1026,11 @@ export function damagePig(noa, pig) {
     if (pig.health <= 0) {
         console.log(`🐷 Свинья исчезла!`)
         
-        // Добавляем мясо в инвентарь
+        // Добавляем мясо свиньи в инвентарь
         // Количество мяса зависит от размера свиньи
         const meatCount = pig.size === 'small' ? 1 : 2
-        addItem('meat', meatCount)
-        console.log(`🥩 Получено мяса: ${meatCount}`)
+        addItem('pig_meat', meatCount)
+        console.log(`🥩 Получено мяса свиньи: ${meatCount}`)
         
         // Удаляем из массива
         const index = pigs.indexOf(pig)
@@ -1056,10 +1056,10 @@ export function damageCow(noa, cow) {
         if (cow.health <= 0) {
         console.log(`🐄 Корова исчезла!`)
         
-        // Добавляем мясо в инвентарь (количество зависит от размера)
+        // Добавляем мясо коровы в инвентарь (количество зависит от размера)
         const meatCount = cow.size === 'small' ? 2 : 3
-        addItem('meat', meatCount)
-        console.log(`🥩 Получено мяса: ${meatCount}`)
+        addItem('cow_meat', meatCount)
+        console.log(`🥩 Получено мяса коровы: ${meatCount}`)
         
         const index = cows.indexOf(cow)
         if (index > -1) {
