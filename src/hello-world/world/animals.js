@@ -3,7 +3,7 @@ import * as BABYLON from '@babylonjs/core'
 import { noiseHeight } from '../biome.js'
 import { getHeightAt } from './height.js'
 import { getBiome } from '../biome.js'
-import { createPigMaterial } from '../materials.js'
+import { createPigMaterial, createCowMaterial } from '../materials.js'
 import { addItem } from '../ui/inventory.js'
 
 // Получаем noa из window (устанавливается в index.js) или из engine.js
@@ -12,10 +12,15 @@ const noa = (typeof window !== 'undefined' && window.noa) || null
 
 // список всех животных
 const pigs = []
+const cows = []
 
-// Экспортируем массив свиней и функции для работы с ними
+// Экспортируем массивы животных и функции для работы с ними
 export function getPigs() {
     return pigs
+}
+
+export function getCows() {
+    return cows
 }
 
 
@@ -183,6 +188,171 @@ export function createPig(noa, scene, x, z, y = null, size = 'normal') {
 
 
 // ------------------------------------------------------------
+// Создание меша коровы
+// ------------------------------------------------------------
+function buildCowMesh(scene, material, size = 'normal', noa = null) {
+    // Коровы больше свиней - определяем масштаб в зависимости от размера
+    const isSmall = size === 'small'
+    const scale = isSmall ? 1.1 : 1.4 // Уменьшил масштаб (было 1.3 и 1.8)
+    
+    // Базовые размеры (немного больше, чем у свиней, но не слишком)
+    const body = BABYLON.MeshBuilder.CreateBox('cowBody', { width: 1.1, height: 0.9, depth: 1.5 }, scene)
+    body.position.y = 0.45
+
+    const head = BABYLON.MeshBuilder.CreateBox('cowHead', { width: 0.7, height: 0.7, depth: 0.7 }, scene)
+    head.position.set(0, 0.6, 0.95)
+
+    // Создаем рога ДО объединения (только для больших коров)
+    const horns = []
+    if (size === 'normal') {
+        // Левый рог - длинный, слева от головы
+        const leftHorn = BABYLON.MeshBuilder.CreateBox('cowHornLeft', { width: 0.18, height: 0.6, depth: 0.18 }, scene)
+        leftHorn.position.set(-0.35, 0.95, 1.0) // Слева от головы, выше
+        leftHorn.rotation.z = -0.2 // Наклонен назад
+        horns.push(leftHorn)
+        
+        // Правый рог - длинный, справа от головы
+        const rightHorn = BABYLON.MeshBuilder.CreateBox('cowHornRight', { width: 0.18, height: 0.6, depth: 0.18 }, scene)
+        rightHorn.position.set(0.35, 0.95, 1.0) // Справа от головы, выше
+        rightHorn.rotation.z = 0.2 // Наклонен назад
+        horns.push(rightHorn)
+    }
+
+    const legs = []
+    const legPositions = [
+        [-0.4, -0.45, 0.65], [0.4, -0.45, 0.65],
+        [-0.4, -0.45, -0.65], [0.4, -0.45, -0.65],
+    ]
+
+    for (const [lx, ly, lz] of legPositions) {
+        const leg = BABYLON.MeshBuilder.CreateBox('cowLeg', { width: 0.22, height: 0.5, depth: 0.22 }, scene)
+        leg.position.set(lx, ly, lz)
+        legs.push(leg)
+    }
+
+    // Объединяем все части коровы, включая рога (если есть)
+    const cow = BABYLON.Mesh.MergeMeshes([body, head, ...legs, ...horns], true, true)
+    cow.material = material
+    cow.scaling.set(scale, scale, scale)
+
+    return cow
+}
+
+
+// ------------------------------------------------------------
+// Создание сущности коровы
+// ------------------------------------------------------------
+export function createCow(noa, scene, x, z, y = null, size = 'normal') {
+    const groundY = y !== null ? y : getHeightAt(x, z)
+    
+    // Параметры коровы (больше свиней, но не слишком большие)
+    const isSmall = size === 'small'
+    // Маленькие коровы: width 0.6, height 1.0 (больше маленьких свиней: 0.4, 0.7)
+    // Обычные коровы: width 0.9, height 1.4 (больше обычных свиней: 0.7, 1.2)
+    const width = isSmall ? 0.6 : 0.9
+    const height = isSmall ? 1.0 : 1.4
+    const baseSpeed = isSmall ? 0.2 : 0.15 // Маленькие коровы немного быстрее
+    const speedVariation = isSmall ? 0.12 : 0.1
+    const offsetY = height / 2
+    
+    // Проверяем, что место для спавна свободно
+    const spawnX = Math.floor(x)
+    const spawnZ = Math.floor(z)
+    
+    // Ищем свободное место в радиусе 2 блоков
+    let foundSpot = false
+    let finalX = spawnX
+    let finalZ = spawnZ
+    let finalY = groundY
+    
+    for (let dx = -2; dx <= 2 && !foundSpot; dx++) {
+        for (let dz = -2; dz <= 2 && !foundSpot; dz++) {
+            const checkX = spawnX + dx
+            const checkZ = spawnZ + dz
+            const checkY = getHeightAt(checkX, checkZ)
+            
+            const blockAtGround = noa.getBlock(checkX, checkY, checkZ)
+            const blockAtSpawn = noa.getBlock(checkX, checkY + 1, checkZ)
+            const blockAtSpawnTop = noa.getBlock(checkX, checkY + 2, checkZ)
+            
+            if (blockAtGround !== 0 && blockAtSpawn === 0 && blockAtSpawnTop === 0) {
+                foundSpot = true
+                finalX = checkX
+                finalZ = checkZ
+                finalY = checkY
+            }
+        }
+    }
+    
+    if (!foundSpot) {
+        console.log(`🐄 Cannot spawn cow at ${x} ${groundY} ${z} - no free space nearby`)
+        return null
+    }
+    
+    const material = createCowMaterial(noa)
+    const mesh = buildCowMesh(scene, material, size, noa)
+    const spawnY = finalY + 1 + offsetY
+
+    const id = noa.entities.add([finalX + 0.5, spawnY, finalZ + 0.5])
+
+    noa.entities.addComponent(id, noa.entities.names.physics, {
+        width: width,
+        height: height,
+        gravity: true,
+        collideWithTerrain: true,
+        collideWithEntities: false,
+        solid: true,
+        restitution: 0,
+        friction: 0.3,
+    })
+
+    noa.entities.addComponent(id, noa.entities.names.mesh, {
+        mesh: mesh,
+        offset: [0, offsetY, 0]
+    })
+
+    const body = noa.entities.getPhysicsBody(id)
+    body.mass = 1
+    body.friction = 0.3
+
+    // Здоровье зависит от размера: маленькие - 5, обычные - 7
+    const maxHealth = isSmall ? 5 : 7
+    
+    const originalEmissiveR = 0.1
+    const originalEmissiveG = 0.1
+    const originalEmissiveB = 0.1
+    
+    const initialAngle = Math.random() * Math.PI * 2
+    const initialRotation = initialAngle - Math.PI / 2
+    
+    cows.push({
+        id,
+        mesh,
+        body,
+        angle: initialAngle,
+        targetAngle: initialAngle,
+        currentRotation: initialRotation,
+        speed: baseSpeed + Math.random() * speedVariation,
+        directionChangeTimer: 60 + Math.floor(Math.random() * 60),
+        jumpCooldown: 0,
+        size: size, // Сохраняем размер
+        health: maxHealth,
+        maxHealth: maxHealth,
+        material: material,
+        originalEmissive: { r: originalEmissiveR, g: originalEmissiveG, b: originalEmissiveB },
+        isHighlighted: false,
+        stuckCheckCounter: 0,
+        lastPosition: [finalX + 0.5, spawnY, finalZ + 0.5],
+    })
+    
+    mesh.rotation.y = initialRotation
+    const sizeEmoji = isSmall ? '🐄' : '🐃'
+    console.log(`${sizeEmoji} ${size} Cow spawned at ${x} ${spawnY} ${z}`)
+    return id
+}
+
+
+// ------------------------------------------------------------
 // Спавн свинок возле игрока
 // ------------------------------------------------------------
 export function spawnDebugPigs(noa, scene, count = 5) {
@@ -266,8 +436,9 @@ function registerTickHandler() {
     currentNoa.on('tick', () => {
         tick++
         
-        // Определяем, на какую свинью смотрит игрок (каждый тик для подсветки)
+        // Определяем, на какое животное смотрит игрок (каждый тик для подсветки)
         let targetedPig = null
+        let targetedCow = null
         if (currentNoa.playerEntity) {
             const playerPos = currentNoa.entities.getPosition(currentNoa.playerEntity)
             if (playerPos) {
@@ -281,15 +452,15 @@ function registerTickHandler() {
                 const dirY = -Math.sin(pitch)
                 const dirZ = Math.cos(pitch) * Math.cos(yaw)
                 
-                // Ищем ближайшую свинью в направлении взгляда (до 6 блоков)
+                // Ищем ближайшее животное в направлении взгляда (до 6 блоков)
                 const maxDistance = 6.0
                 let closestDistance = maxDistance
                 
+                // Проверяем свиней
                 for (const pig of pigs) {
                     const pigPos = currentNoa.entities.getPosition(pig.id)
                     if (!pigPos) continue
                     
-                    // Вектор от игрока к свинье
                     const dx = pigPos[0] - playerPos[0]
                     const dy = pigPos[1] - playerPos[1]
                     const dz = pigPos[2] - playerPos[2]
@@ -297,18 +468,40 @@ function registerTickHandler() {
                     
                     if (distance > maxDistance) continue
                     
-                    // Проверяем, находится ли свинья в направлении взгляда
                     const normDx = dx / distance
                     const normDy = dy / distance
                     const normDz = dz / distance
                     
-                    // Скалярное произведение для проверки угла
                     const dot = dirX * normDx + dirY * normDy + dirZ * normDz
                     
-                    // Если свинья в конусе взгляда (угол < 60 градусов, dot > 0.5) - более широкий конус
                     if (dot > 0.5 && distance < closestDistance) {
                         closestDistance = distance
                         targetedPig = pig
+                    }
+                }
+                
+                // Проверяем коров
+                closestDistance = maxDistance
+                for (const cow of cows) {
+                    const cowPos = currentNoa.entities.getPosition(cow.id)
+                    if (!cowPos) continue
+                    
+                    const dx = cowPos[0] - playerPos[0]
+                    const dy = cowPos[1] - playerPos[1]
+                    const dz = cowPos[2] - playerPos[2]
+                    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz)
+                    
+                    if (distance > maxDistance) continue
+                    
+                    const normDx = dx / distance
+                    const normDy = dy / distance
+                    const normDz = dz / distance
+                    
+                    const dot = dirX * normDx + dirY * normDy + dirZ * normDz
+                    
+                    if (dot > 0.5 && distance < closestDistance) {
+                        closestDistance = distance
+                        targetedCow = cow
                     }
                 }
             }
@@ -344,9 +537,34 @@ function registerTickHandler() {
             }
         }
         
+        // Обновляем подсветку для всех коров (каждый тик)
+        for (const cow of cows) {
+            if (!cow.material || !cow.originalEmissive) continue
+            
+            const shouldHighlight = cow === targetedCow
+            if (cow.isHighlighted !== shouldHighlight) {
+                cow.isHighlighted = shouldHighlight
+                if (shouldHighlight) {
+                    cow.material.emissiveColor.r = Math.min(1, cow.originalEmissive.r * 3)
+                    cow.material.emissiveColor.g = Math.min(1, cow.originalEmissive.g * 3)
+                    cow.material.emissiveColor.b = Math.min(1, cow.originalEmissive.b * 3)
+                    cow.material.diffuseColor.r = Math.min(1, cow.material.diffuseColor.r * 1.2)
+                    cow.material.diffuseColor.g = Math.min(1, cow.material.diffuseColor.g * 1.2)
+                    cow.material.diffuseColor.b = Math.min(1, cow.material.diffuseColor.b * 1.2)
+                } else {
+                    cow.material.emissiveColor.r = cow.originalEmissive.r
+                    cow.material.emissiveColor.g = cow.originalEmissive.g
+                    cow.material.emissiveColor.b = cow.originalEmissive.b
+                    cow.material.diffuseColor.r = 0.95
+                    cow.material.diffuseColor.g = 0.95
+                    cow.material.diffuseColor.b = 0.95
+                }
+            }
+        }
+        
         if (tick % 6 !== 0) return
         
-        if (pigs.length === 0) return
+        if (pigs.length === 0 && cows.length === 0) return
 
         for (const pig of pigs) {
         const { id, mesh, body } = pig
@@ -590,6 +808,192 @@ function registerTickHandler() {
             body.velocity[2] *= 0.9
         }
     }
+    
+    // Обработка движения коров (аналогично свиньям)
+    for (const cow of cows) {
+        const { id, mesh, body } = cow
+        if (!mesh || !body) continue
+
+        const pos = currentNoa.entities.getPosition(id)
+        if (!pos) continue
+
+        cow.directionChangeTimer--
+        cow.jumpCooldown--
+        cow.stuckCheckCounter++
+
+        const groundX = Math.floor(pos[0])
+        const groundY = Math.floor(pos[1])
+        const groundZ = Math.floor(pos[2])
+        let under = currentNoa.getBlock(groundX, groundY - 1, groundZ)
+        if (under === 0) {
+            under = currentNoa.getBlock(groundX - 1, groundY - 1, groundZ) ||
+                    currentNoa.getBlock(groundX + 1, groundY - 1, groundZ) ||
+                    currentNoa.getBlock(groundX, groundY - 1, groundZ - 1) ||
+                    currentNoa.getBlock(groundX, groundY - 1, groundZ + 1) ||
+                    0
+        }
+        
+        const cowHeight = body.height || 1.5
+        const checkHeight = Math.ceil(cowHeight)
+        
+        const centerBlockY = Math.floor(pos[1])
+        const centerBlockX = Math.floor(pos[0])
+        const centerBlockZ = Math.floor(pos[2])
+        
+        const blockAtFeet = currentNoa.getBlock(centerBlockX, centerBlockY, centerBlockZ)
+        const blockAtBody = currentNoa.getBlock(centerBlockX, centerBlockY + 1, centerBlockZ)
+        const blockAtHead = checkHeight > 1 ? currentNoa.getBlock(centerBlockX, centerBlockY + 2, centerBlockZ) : 0
+        
+        const isInsideBlock = blockAtFeet !== 0 || blockAtBody !== 0 || blockAtHead !== 0
+        
+        let isNotMoving = false
+        if (cow.stuckCheckCounter >= 20) {
+            const lastPos = cow.lastPosition
+            const horizontalDistance = Math.sqrt(
+                Math.pow(pos[0] - lastPos[0], 2) + 
+                Math.pow(pos[2] - lastPos[2], 2)
+            )
+            const minExpectedDistance = Math.max(0.05, cow.speed * 0.33 * 0.3)
+            isNotMoving = horizontalDistance < minExpectedDistance && 
+                         under !== 0 && 
+                         Math.abs(body.velocity[1]) < 0.3
+            cow.stuckCheckCounter = 0
+            cow.lastPosition = [pos[0], pos[1], pos[2]]
+        }
+        
+        if (isInsideBlock || isNotMoving) {
+            let foundFreeSpot = false
+            let freeX = pos[0]
+            let freeY = pos[1]
+            let freeZ = pos[2]
+            let bestDistance = Infinity
+            
+            const offsetY = cowHeight / 2
+            
+            for (let radius = 1; radius <= 5; radius++) {
+                for (let dx = -radius; dx <= radius; dx++) {
+                    for (let dz = -radius; dz <= radius; dz++) {
+                        if (dx === 0 && dz === 0) continue
+                        
+                        const checkX = Math.floor(pos[0] + dx)
+                        const checkZ = Math.floor(pos[2] + dz)
+                        for (let dy = -2; dy <= 2; dy++) {
+                            const checkY = Math.floor(pos[1]) + dy
+                            
+                            const blockAtFeet = currentNoa.getBlock(checkX, checkY, checkZ)
+                            const blockAtBody = currentNoa.getBlock(checkX, checkY + 1, checkZ)
+                            const blockUnder = currentNoa.getBlock(checkX, checkY - 1, checkZ)
+                            
+                            let isFree = blockAtFeet === 0 && blockAtBody === 0 && blockUnder !== 0
+                            if (checkHeight > 1) {
+                                const blockAtHead = currentNoa.getBlock(checkX, checkY + 2, checkZ)
+                                isFree = isFree && blockAtHead === 0
+                            }
+                            
+                            if (isFree) {
+                                const distance = Math.sqrt(dx * dx + dz * dz + dy * dy)
+                                if (distance < bestDistance) {
+                                    bestDistance = distance
+                                    foundFreeSpot = true
+                                    freeX = checkX + 0.5
+                                    freeY = checkY + 1 + offsetY
+                                    freeZ = checkZ + 0.5
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (foundFreeSpot) {
+                currentNoa.entities.setPosition(id, [freeX, freeY, freeZ])
+                body.velocity[0] = 0
+                body.velocity[1] = 0
+                body.velocity[2] = 0
+                cow.lastPosition = [freeX, freeY, freeZ]
+                cow.angle = Math.random() * Math.PI * 2
+                cow.targetAngle = cow.angle
+            } else {
+                const pushAngle = Math.random() * Math.PI * 2
+                body.velocity[1] = 0.8
+                body.velocity[0] = Math.cos(pushAngle) * 0.6
+                body.velocity[2] = Math.sin(pushAngle) * 0.6
+                const newPos = [pos[0], pos[1] + 2, pos[2]]
+                currentNoa.entities.setPosition(id, newPos)
+                cow.lastPosition = [newPos[0], newPos[1], newPos[2]]
+                cow.angle = pushAngle
+                cow.targetAngle = pushAngle
+            }
+            continue
+        }
+        
+        if (cow.stuckCheckCounter === 0) {
+            cow.lastPosition = [pos[0], pos[1], pos[2]]
+        }
+        
+        if (under === 0) {
+            body.velocity[1] = -0.1
+        }
+
+        if (cow.directionChangeTimer <= 0) {
+            cow.targetAngle = Math.random() * Math.PI * 2
+            cow.angle = cow.targetAngle
+            cow.directionChangeTimer = 180 + Math.floor(Math.random() * 300)
+        }
+
+        const targetRotation = cow.angle - Math.PI / 2
+        let angleDiff = targetRotation - cow.currentRotation
+        
+        while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+        while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+        
+        const rotationSpeed = 0.15
+        cow.currentRotation += angleDiff * rotationSpeed
+        
+        mesh.rotation.y = cow.currentRotation
+        
+        const currentMovementAngle = cow.currentRotation + Math.PI / 2
+        if (under !== 0 && Math.abs(body.velocity[1]) < 0.1) {
+            const checkDistance = 0.4
+            const fx = pos[0] + Math.cos(currentMovementAngle) * checkDistance
+            const fz = pos[2] + Math.sin(currentMovementAngle) * checkDistance
+            const currentY = Math.floor(pos[1])
+            
+            const frontBlock = currentNoa.getBlock(Math.floor(fx), currentY, Math.floor(fz))
+            const frontBlockAbove = currentNoa.getBlock(Math.floor(fx), currentY + 1, Math.floor(fz))
+            
+            if (frontBlock !== 0 || frontBlockAbove !== 0) {
+                if (cow.jumpCooldown <= 0) {
+                    const jumpCheckY = currentY + 2
+                    const jumpCheckBlock = currentNoa.getBlock(Math.floor(fx), jumpCheckY, Math.floor(fz))
+                    
+                    if (jumpCheckBlock === 0) {
+                        body.velocity[1] = 0.35
+                        body.velocity[0] = Math.cos(currentMovementAngle) * cow.speed * 2
+                        body.velocity[2] = Math.sin(currentMovementAngle) * cow.speed * 2
+                        cow.jumpCooldown = 30
+                    } else {
+                        cow.targetAngle = Math.random() * Math.PI * 2
+                        cow.angle = cow.targetAngle
+                        cow.directionChangeTimer = 15
+                    }
+                }
+            }
+        }
+        
+        const movementAngle = cow.currentRotation + Math.PI / 2
+        const moveSpeed = cow.speed * 4
+        
+        const isOnGround = under !== 0 || (body.velocity[1] >= -0.1 && body.velocity[1] < 0.3)
+        
+        if (isOnGround) {
+            body.velocity[0] = Math.cos(movementAngle) * moveSpeed
+            body.velocity[2] = Math.sin(movementAngle) * moveSpeed
+        } else {
+            body.velocity[0] *= 0.9
+            body.velocity[2] *= 0.9
+        }
+    }
     })
 }
 
@@ -629,14 +1033,41 @@ export function damagePig(noa, pig) {
 
 
 // ------------------------------------------------------------
+// Нанесение урона корове (вызывается из обработчика fire)
+// ------------------------------------------------------------
+export function damageCow(noa, cow) {
+    if (!cow || cow.health <= 0) return
+    
+    cow.health -= 1
+    console.log(`🐄 Корова получила урон! Здоровье: ${cow.health}/${cow.maxHealth}`)
+    
+        if (cow.health <= 0) {
+        console.log(`🐄 Корова исчезла!`)
+        
+        // Добавляем мясо в инвентарь (количество зависит от размера)
+        const meatCount = cow.size === 'small' ? 2 : 3
+        addItem('meat', meatCount)
+        console.log(`🥩 Получено мяса: ${meatCount}`)
+        
+        const index = cows.indexOf(cow)
+        if (index > -1) {
+            cows.splice(index, 1)
+        }
+        
+        noa.entities.deleteEntity(cow.id)
+    }
+}
+
+
+// ------------------------------------------------------------
 // Генерация животных в чанке
 // ------------------------------------------------------------
 export function generateAnimalsInChunk(noa, ids, x0, y0, z0) {
     const scene = noa.rendering.getScene()
     if (!scene) return // сцена ещё не готова
 
-    // Генерируем несколько животных в чанке
-    const animalCount = Math.floor(Math.random() * 3) // 0-2 животных на чанк
+    // Генерируем больше животных в чанке
+    const animalCount = 3 + Math.floor(Math.random() * 4) // 3-6 попыток спавна на чанк
 
     for (let i = 0; i < animalCount; i++) {
         const x = x0 + Math.floor(Math.random() * 32)
@@ -644,12 +1075,21 @@ export function generateAnimalsInChunk(noa, ids, x0, y0, z0) {
         const y = getHeightAt(x, z)
         const biome = getBiome(x, z)
 
-        // Спавним свинок только в подходящих биомах
-        if (biome === "plains" || biome === "forest") {
-            if (Math.random() < 0.3) { // 30% шанс спавна
+        // Спавним свинок в подходящих биомах (расширили список)
+        if (biome === "plains" || biome === "forest" || biome === "dry") {
+            if (Math.random() < 0.6) { // 60% шанс спавна (было 30%)
                 // Случайно выбираем размер: 50% маленькие, 50% стандартные
                 const size = Math.random() < 0.5 ? 'small' : 'normal'
                 createPig(noa, scene, x, z, y, size)
+            }
+        }
+        
+        // Спавним коров в тех же биомах, что и свиньи
+        if (biome === "plains" || biome === "forest" || biome === "dry") {
+            if (Math.random() < 0.5) { // 50% шанс спавна коровы (было 20%)
+                // Случайно выбираем размер: 50% маленькие, 50% стандартные
+                const size = Math.random() < 0.5 ? 'small' : 'normal'
+                createCow(noa, scene, x, z, y, size)
             }
         }
     }
