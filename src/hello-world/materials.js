@@ -121,6 +121,23 @@ if (materials["snow_top"]) {
 
     console.log("✔ Материалы:", Object.keys(materials))
     console.log("✔ Блоки:", Object.keys(blocks))
+    // ======================
+// 🍄 ГРИБЫ (временный вариант: текстура песка)
+// ======================
+if (materials["sand"]) {
+
+    // Ножка гриба — песочная текстура
+    blocks["mushroom_stem"] = noa.registry.registerBlock(blockIdCounter++, {
+        material: materials["sand"]
+    })
+
+    // Шляпа гриба — тоже песок (временно)
+    blocks["mushroom_cap"] = noa.registry.registerBlock(blockIdCounter++, {
+        material: materials["sand"]
+    })
+
+    console.log("🍄 Грибные блоки зарегистрированы (временная текстура: sand)")
+}
 
     return { blocks, materials, waterID }
 }
