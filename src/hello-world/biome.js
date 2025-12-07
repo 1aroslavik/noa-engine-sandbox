@@ -12,12 +12,29 @@ const _temp = createNoise2D(rnd)
 const _moist = createNoise2D(rnd)
 const _height = createNoise2D(rnd)
 
-// ДОБАВЛЯЕМ НОВЫЕ ШУМЫ ДЛЯ ВОДЫ
+// шумы воды
 const _lake  = createNoise2D(rnd)
 const _river = createNoise2D(rnd)
 const _water = createNoise2D(rnd)
 
-// ===== ЭКСПОРТЫ =====
+
+// ====================================================
+// ✨ ПЕЩЕРНЫЕ ШУМЫ (с правильными экспортами!)
+// ====================================================
+
+// Swiss-cheese caves
+export const _caveCheese = createNoise2D(rnd)
+
+// Worm tunnels
+export const _caveWormA = createNoise2D(rnd)
+export const _caveWormB = createNoise2D(rnd)
+
+// Surface cracks
+export const _caveCrack = createNoise2D(rnd)
+
+
+// ========= ЭКСПОРТЫ ШУМОВ =========
+
 export function noiseTemp(x, z) {
     return _temp(x * 0.001, z * 0.001)
 }
@@ -30,7 +47,6 @@ export function noiseHeight(x, z) {
     return _height(x * 0.0008, z * 0.0008)
 }
 
-// ЭТОГО НЕ ХВАТАЛО
 export function noiseLake(x, z) {
     return _lake(x, z)
 }
@@ -43,50 +59,30 @@ export function noiseWater(x, z) {
     return _water(x, z)
 }
 
-// ========= НОВЫЕ БИОМЫ =========
+
+// ========= BIOME LOGIC =========
 export function getBiome(x, z) {
-    const t = noiseTemp(x, z)    // температура
-    const m = noiseMoist(x, z)   // влажность
-    const h = noiseHeight(x, z)  // НЕ абсолютная высота, а нормализованный шум
 
-    // ---- вычисляем реальную высоту в мире ----
-    const realH = 38 + (h * 32)  // как в твоём getHeightAt()
+    const t = noiseTemp(x, z)
+    const m = noiseMoist(x, z)
+    const h = noiseHeight(x, z)
 
-    // =====================================================
-    // ❄ ВЫСОКОГОРНЫЙ СНЕГ — ВСЕГДА СНЕГ НА ВЕРШИНАХ ГОР
-    // =====================================================
-    if (realH > 80) return "snow";
+    const realH = 38 + (h * 32)
 
-    // =====================================================
-    // ❄ СИЛЬНО ХОЛОДНЫЕ БИОМЫ
-    // =====================================================
-    if (t < -0.55 && m < 0) return "ice";    // ледяные равнины
-    if (t < -0.40 && h > 0.35) return "snow";
-    if (t < -0.35) return "tundra";
+    if (realH > 80) return "snow"
 
-    // =====================================================
-    // ⛰ ГОРЫ (НЕ высокие)
-    // =====================================================
-    if (h > 0.55) return "mountain";
+    if (t < -0.55 && m < 0) return "ice"
+    if (t < -0.40 && h > 0.35) return "snow"
+    if (t < -0.35) return "tundra"
 
-    // =====================================================
-    // 🏜 ПУСТЫНИ
-    // =====================================================
-    if (t > 0.35 && m < -0.25) return "red_desert";
-    if (t > 0.25 && m < -0.10) return "desert";
+    if (h > 0.55) return "mountain"
 
-    // =====================================================
-    // 🌾 СУХИЕ ЛУГА
-    // =====================================================
-    if (t > 0.15 && m < 0.05) return "dry";
+    if (t > 0.35 && m < -0.25) return "red_desert"
+    if (t > 0.25 && m < -0.10) return "desert"
 
-    // =====================================================
-    // 🌲 ЛЕСА
-    // =====================================================
-    if (m > 0.25) return "forest";
+    if (t > 0.15 && m < 0.05) return "dry"
 
-    // =====================================================
-    // 🌱 РАВНИНЫ – по умолчанию
-    // =====================================================
-    return "plains";
+    if (m > 0.25) return "forest"
+
+    return "plains"
 }
