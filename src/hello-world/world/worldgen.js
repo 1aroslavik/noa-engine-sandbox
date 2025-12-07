@@ -12,7 +12,6 @@ import {
     _caveWormB,
     _caveCrack
 } from "../biome.js";
-import { generatePlantsInChunk } from "./plants.js"
 
 import { generateTreesInChunk } from "./trees.js";
 import { generateAnimalsInChunk } from "./animals.js";
@@ -21,7 +20,7 @@ import { getHeightAt } from "./height.js";
 export { getHeightAt } from "./height.js";
 
 import { createNoise2D } from "simplex-noise";
-
+import { generateMushroomsInChunk } from "./plants.js";
 // Пещерные шумы (оставляем твои)
 const caveNoiseA = createNoise2D(() => Math.random());
 const caveNoiseB = createNoise2D(() => Math.random());
@@ -59,6 +58,7 @@ export function getWaterLevel(x, z) {
 export function registerWorldGeneration(noa, ids) {
 
     const B = ids.blocks;
+const GRASS_PLANT = ids.grassID;   // новый растительный блок
 
     const GRASS  = B["grass"];
     const DIRT   = B["dirt"];
@@ -464,7 +464,9 @@ if (biome === "tundra" && wy < height - 4 && wy > height - 10) {
         if (y === 0) {
             generateTreesInChunk(noa, ids, x, y, z);
             generateAnimalsInChunk(noa, ids, x, y, z);
-            
+            // 🍄 Грибы
+            generateMushroomsInChunk(noa, ids, x, y, z);
+
         }
     });
     
