@@ -20,7 +20,7 @@ import { getHeightAt } from "./height.js";
 export { getHeightAt } from "./height.js";
 
 import { createNoise2D } from "simplex-noise";
-import { generateMushroomsInChunk } from "./plants.js";
+import { generatePlantsInChunk } from "./plants.js";
 // Пещерные шумы (оставляем твои)
 const caveNoiseA = createNoise2D(() => Math.random());
 const caveNoiseB = createNoise2D(() => Math.random());
@@ -442,7 +442,7 @@ if (biome === "tundra" && wy < height - 4 && wy > height - 10) {
             generateTreesInChunk(noa, ids, x, y, z);
             generateAnimalsInChunk(noa, ids, x, y, z);
             // 🍄 Грибы
-            generateMushroomsInChunk(noa, ids, x, y, z);
+            generatePlantsInChunk(noa, ids, x, y, z);
 
         }
     });
