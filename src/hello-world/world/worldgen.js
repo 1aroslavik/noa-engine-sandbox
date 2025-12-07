@@ -127,6 +127,10 @@ function carveSurfaceRavine(data, i, j, k, wx, wy, wz, height, biome) {
 }
 
     noa.world.on("worldDataNeeded", (id, data, x, y, z) => {
+        // Логируем только первые несколько чанков для отладки
+        if (y === 0 && (Math.abs(x) < 100 && Math.abs(z) < 100)) {
+            console.log(`🌍 Генерация чанка: x=${x}, y=${y}, z=${z}, id=${id}`)
+        }
 
         const SX = data.shape[0];
         const SY = data.shape[1];
@@ -180,9 +184,9 @@ if (y === 0) {
 
 
 // старый noise F
-function F(noise, wx, wz, scale) {
+const F = (noise, wx, wz, scale) => {
     return Math.abs(noise(wx * scale, wz * scale));
-}
+};
 
 
                     // ============================
@@ -506,4 +510,6 @@ if (y === 0 && wy === height) {
             generateAnimalsInChunk(noa, ids, x, y, z);
         }
     });
+    
+    console.log("✅ Генерация мира зарегистрирована")
 }

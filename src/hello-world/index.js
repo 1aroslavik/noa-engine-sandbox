@@ -9,6 +9,7 @@ import { updateWater } from "./world/water.js"
 import { getPigs, damagePig } from "./world/animals.js"
 import "./ui/inventory.js" // Подключаем инвентарь и крафтинг
 import { addItem } from "./ui/inventory.js"
+import { getItemDefinition } from "./ui/items.js"
 
 // =======================
 //    СОЗДАЁМ ДВИЖОК
@@ -44,6 +45,15 @@ async function start() {
     setWaterID(ids.waterID)
 
     registerWorldGeneration(noa, ids)
+    
+    // Даем движку время на регистрацию обработчика генерации
+    await new Promise(resolve => setTimeout(resolve, 100))
+    
+    // Проверяем что движок готов
+    if (!noa.world) {
+        console.error("❌ Ошибка: движок мира не инициализирован")
+        throw new Error("World engine not initialized")
+    }
 
     setupPlayerMesh()
 
@@ -58,6 +68,9 @@ async function start() {
     // ======= СПАВН У ВОДЫ =======
     updateLoadingText("Spawning player...")
     await spawnPlayerNearWater(ids)
+    
+    // Даем движку время на обработку спавна и начало загрузки чанков
+    await new Promise(resolve => setTimeout(resolve, 200))
 
     // Проверяем что мир сгенерировался и ждем если нужно
     await waitForWorldGeneration()
@@ -71,9 +84,11 @@ start()
 // =======================
 //   ПРОВЕРКА ГЕНЕРАЦИИ МИРА
 // =======================
-async function waitForWorldGeneration(maxAttempts = 50, delayMs = 100) {
+async function waitForWorldGeneration(maxAttempts = 100, delayMs = 100) {
     console.log("🌍 Проверка генерации мира...")
     updateLoadingText("Verifying world generation...")
+    
+    const chunkSize = 32 // Размер чанка из настроек движка
     
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         const playerPos = noa.entities.getPosition(noa.playerEntity)
@@ -86,20 +101,55 @@ async function waitForWorldGeneration(maxAttempts = 50, delayMs = 100) {
         const y = Math.floor(playerPos[1])
         const z = Math.floor(playerPos[2])
 
+        // Принудительно запрашиваем загрузку чанков вокруг игрока на каждой итерации
+        // Это гарантирует, что движок попытается загрузить чанки
+        const chunkX = Math.floor(x / chunkSize) * chunkSize
+        const chunkZ = Math.floor(z / chunkSize) * chunkSize
+        
+        // Запрашиваем чанки в радиусе 2 чанков вокруг игрока
+        for (let dx = -2; dx <= 2; dx++) {
+            for (let dz = -2; dz <= 2; dz++) {
+                const cx = chunkX + dx * chunkSize
+                const cz = chunkZ + dz * chunkSize
+                
+                // Проверяем блоки в разных частях чанка, чтобы заставить его загрузиться
+                const testPositions = [
+                    [cx + chunkSize / 2, y, cz + chunkSize / 2], // центр
+                    [cx, y, cz], // угол
+                    [cx + chunkSize - 1, y, cz + chunkSize - 1], // противоположный угол
+                ]
+                
+                for (const [tx, ty, tz] of testPositions) {
+                    try {
+                        noa.getBlock(tx, ty, tz)
+                        // Также проверяем блоки ниже
+                        noa.getBlock(tx, ty - 1, tz)
+                        noa.getBlock(tx, ty - 2, tz)
+                    } catch (e) {
+                        // Игнорируем ошибки
+                    }
+                }
+            }
+        }
+        
+        // Даем движку время обработать запросы
+        await new Promise(resolve => setTimeout(resolve, 50))
+
         // Проверяем несколько блоков вокруг игрока
         const checkPositions = [
             [x, y - 1, z],      // под ногами
-            [x, y, z],          // на уровне игрока
-            [x + 1, y, z],      // рядом
-            [x - 1, y, z],      // рядом
-            [x, y, z + 1],      // рядом
-            [x, y, z - 1],      // рядом
-            [x, y - 2, z],      // глубже
+            [x, y - 2, z],      // глубже под ногами
             [x, y - 3, z],      // еще глубже
+            [x, y - 4, z],      // еще глубже
+            [x + 1, y - 1, z],  // рядом под ногами
+            [x - 1, y - 1, z],  // рядом под ногами
+            [x, y - 1, z + 1],  // рядом под ногами
+            [x, y - 1, z - 1],  // рядом под ногами
         ]
 
         let hasSolidBlocks = false
         let hasValidBlocks = false
+        let validBlockCount = 0
 
         for (const [bx, by, bz] of checkPositions) {
             try {
@@ -107,10 +157,10 @@ async function waitForWorldGeneration(maxAttempts = 50, delayMs = 100) {
                 // Если блок не undefined и не null, значит чанк загружен
                 if (block !== undefined && block !== null) {
                     hasValidBlocks = true
+                    validBlockCount++
                     // Если есть хотя бы один не-воздушный блок, мир сгенерирован
                     if (block !== 0) {
                         hasSolidBlocks = true
-                        break
                     }
                 }
             } catch (e) {
@@ -118,34 +168,17 @@ async function waitForWorldGeneration(maxAttempts = 50, delayMs = 100) {
             }
         }
 
-        // Если нашли валидные блоки и хотя бы один твердый - мир готов
-        if (hasValidBlocks && hasSolidBlocks) {
-            console.log(`✅ Мир сгенерирован (попытка ${attempt + 1})`)
+        // Если нашли достаточно валидных блоков и хотя бы один твердый - мир готов
+        if (hasValidBlocks && hasSolidBlocks && validBlockCount >= 3) {
+            console.log(`✅ Мир сгенерирован (попытка ${attempt + 1}, проверено блоков: ${validBlockCount})`)
             updateLoadingText("World ready!")
             await new Promise(resolve => setTimeout(resolve, 200))
             return
         }
 
-        // Если чанки еще не загружены, принудительно запрашиваем их
-        if (!hasValidBlocks) {
-            // Принудительно запрашиваем загрузку чанков вокруг игрока
-            const chunkSize = 32 // Размер чанка из настроек движка
-            const chunkX = Math.floor(x / chunkSize) * chunkSize
-            const chunkZ = Math.floor(z / chunkSize) * chunkSize
-            
-            // Запрашиваем несколько чанков вокруг
-            for (let dx = -1; dx <= 1; dx++) {
-                for (let dz = -1; dz <= 1; dz++) {
-                    const cx = chunkX + dx * chunkSize
-                    const cz = chunkZ + dz * chunkSize
-                    // Проверяем блок в центре чанка, чтобы заставить его загрузиться
-                    try {
-                        noa.getBlock(cx + chunkSize / 2, y, cz + chunkSize / 2)
-                    } catch (e) {
-                        // Игнорируем ошибки
-                    }
-                }
-            }
+        // Обновляем текст загрузки с прогрессом
+        if (attempt % 10 === 0) {
+            updateLoadingText(`Verifying world generation... (${attempt + 1}/${maxAttempts})`)
         }
 
         if (attempt < maxAttempts - 1) {
@@ -153,7 +186,8 @@ async function waitForWorldGeneration(maxAttempts = 50, delayMs = 100) {
         }
     }
 
-    console.warn("⚠️ Предупреждение: не удалось подтвердить генерацию мира, но продолжаем...")
+    console.warn("⚠️ Предупреждение: не удалось подтвердить генерацию мира после всех попыток")
+    console.warn("⚠️ Продолжаем загрузку, но мир может быть не полностью сгенерирован")
 }
 
 // =======================
@@ -333,12 +367,39 @@ function setupInteraction(placeBlockID, blocksMap, waterID) {
         return blockName
     }
 
+    // Переменная для отслеживания времени последнего ломания блока
+    let lastBlockBreakTime = 0
+    
     noa.inputs.down.on("fire", () => {
         // Сначала проверяем блоки (как обычно)
         if (noa.targetedBlock) {
             const p = noa.targetedBlock.position
             // Получаем ID блока перед его разрушением
             const blockId = noa.getBlock(p[0], p[1], p[2])
+            
+            // Проверяем, есть ли кирка в руках
+            // @ts-ignore
+            const selectedItem = window.getSelectedItem ? window.getSelectedItem() : null
+            let breakSpeed = 1.0 // Базовая скорость ломания
+            
+            if (selectedItem && selectedItem.name) {
+                const itemDef = getItemDefinition(selectedItem.name)
+                // @ts-ignore
+                if (itemDef.toolType === 'pickaxe' && itemDef.efficiency) {
+                    // @ts-ignore
+                    breakSpeed = itemDef.efficiency
+                }
+            }
+            
+            // Проверяем кулдаун (чтобы не ломать слишком быстро)
+            const currentTime = Date.now()
+            const requiredCooldown = Math.max(50, 200 / breakSpeed) // Минимум 50мс, максимум 200мс
+            
+            if (currentTime - lastBlockBreakTime < requiredCooldown) {
+                return // Слишком рано, пропускаем
+            }
+            
+            lastBlockBreakTime = currentTime
             
             // Разрушаем блок
             noa.setBlock(0, p[0], p[1], p[2])
@@ -409,7 +470,29 @@ function setupInteraction(placeBlockID, blocksMap, waterID) {
         
         // Если нашли свинью, наносим урон
         if (closestPig) {
-            damagePig(noa, closestPig)
+            // Проверяем, есть ли меч в руках
+            // @ts-ignore
+            const selectedItem = window.getSelectedItem ? window.getSelectedItem() : null
+            let damageMultiplier = 1.0 // Базовый урон
+            
+            if (selectedItem && selectedItem.name) {
+                const itemDef = getItemDefinition(selectedItem.name)
+                // @ts-ignore
+                if (itemDef.toolType === 'sword' && itemDef.damage) {
+                    // @ts-ignore
+                    damageMultiplier = itemDef.damage
+                }
+            }
+            
+            // Наносим урон с учетом множителя
+            // damagePig наносит 1 урон, умножаем на множитель
+            for (let i = 0; i < Math.floor(damageMultiplier); i++) {
+                damagePig(noa, closestPig)
+            }
+            // Если есть дробная часть, применяем с вероятностью
+            if (damageMultiplier % 1 > 0 && Math.random() < (damageMultiplier % 1)) {
+                damagePig(noa, closestPig)
+            }
         }
     })
 

@@ -71,6 +71,48 @@ export const ITEM_DEFINITIONS = {
     description: 'Палка'
   },
   
+  // Инструменты
+  'wooden_pickaxe': {
+    name: 'wooden_pickaxe',
+    rarity: RARITY.COMMON,
+    type: MATERIAL_TYPE.ORGANIC,
+    craftDifficulty: CRAFT_DIFFICULTY.EASY,
+    description: 'Деревянная кирка',
+    toolType: 'pickaxe',
+    efficiency: 1.5,
+    durability: 60
+  },
+  'stone_pickaxe': {
+    name: 'stone_pickaxe',
+    rarity: RARITY.COMMON,
+    type: MATERIAL_TYPE.MINERAL,
+    craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: 'Каменная кирка',
+    toolType: 'pickaxe',
+    efficiency: 2.0,
+    durability: 132
+  },
+  'wooden_sword': {
+    name: 'wooden_sword',
+    rarity: RARITY.COMMON,
+    type: MATERIAL_TYPE.ORGANIC,
+    craftDifficulty: CRAFT_DIFFICULTY.EASY,
+    description: 'Деревянный меч',
+    toolType: 'sword',
+    damage: 1.5,
+    durability: 60
+  },
+  'stone_sword': {
+    name: 'stone_sword',
+    rarity: RARITY.COMMON,
+    type: MATERIAL_TYPE.MINERAL,
+    craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: 'Каменный меч',
+    toolType: 'sword',
+    damage: 2.0,
+    durability: 132
+  },
+  
   // Минеральные материалы
   'stone': {
     name: 'stone',
