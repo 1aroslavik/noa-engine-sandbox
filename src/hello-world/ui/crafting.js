@@ -23,6 +23,7 @@ const baseRecipes = [
     difficulty: CRAFT_DIFFICULTY.EASY,
     description: "Изготовление палок из досок"
   }
+  // Инструменты временно отключены
 ]
 
 // === ДИНАМИЧЕСКИ ГЕНЕРИРУЕМЫЕ РЕЦЕПТЫ ===

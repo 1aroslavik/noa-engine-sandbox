@@ -83,6 +83,10 @@ export function registerWorldGeneration(noa, ids) {
     const WATER = ids.waterID;
 
     noa.world.on("worldDataNeeded", (id, data, x, y, z) => {
+        // Логируем только первые несколько чанков для отладки
+        if (y === 0 && (Math.abs(x) < 100 && Math.abs(z) < 100)) {
+            console.log(`🌍 Генерация чанка: x=${x}, y=${y}, z=${z}, id=${id}`)
+        }
 
         const SX = data.shape[0];
         const SY = data.shape[1];
@@ -133,7 +137,7 @@ export function registerWorldGeneration(noa, ids) {
 // функция шума (вынесена наверх — больше не ломает циклы)
 function F(noise, wx, wz, scale) {
     return Math.abs(noise(wx * scale, wz * scale));
-}
+};
 
 // =====================================================
 // ПОВЕРХНОСТНЫЕ УКРАШЕНИЯ
@@ -400,4 +404,6 @@ if (wy < height - 6) {
             generateAnimalsInChunk(noa, ids, x, y, z);
         }
     });
+    
+    console.log("✅ Генерация мира зарегистрирована")
 }
