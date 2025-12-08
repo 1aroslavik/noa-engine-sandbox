@@ -18,16 +18,28 @@ export async function initMaterialsAndBlocks(noa) {
     // Сохраняем blockIdCounter глобально для использования при динамической регистрации
     // @ts-ignore
     window.blockIdCounter = blockIdCounter
+    
+    // Сохраняем URL текстуры ice глобально для использования в glass
+    // @ts-ignore
+    window.iceTextureURL = null
 
     // ======================
     // 1. Регистрируем материалы CVAE
     // ======================
     for (const name of Object.keys(tex)) {
         const matName = "mat_" + name
+        const textureURL = make(tex[name])
         noa.registry.registerMaterial(matName, {
-            textureURL: make(tex[name])
+            textureURL: textureURL
         })
         materials[name] = matName
+        
+        // Сохраняем URL текстуры ice глобально
+        if (name === 'ice') {
+            // @ts-ignore
+            window.iceTextureURL = textureURL
+            console.log('💾 Сохранен URL текстуры ice для glass')
+        }
     }
     
     // Регистрируем динамически созданные текстуры (из крафтинга)
@@ -240,15 +252,86 @@ if (materials["grass_dry_top"]) {
         const detail = event.detail
         const textureName = detail.textureName
         const textureData = detail.textureData
+        const useIceTexture = detail.useIceTexture
+        
+        // Если это glass и нужно использовать текстуру ice
+        if (textureName === 'glass' && useIceTexture) {
+            console.log('🔷 Регистрация glass с текстурой ice (синеватый оттенок)')
+            
+            // Получаем сохраненный URL текстуры ice
+            // @ts-ignore
+            const iceTextureURL = window.iceTextureURL
+            
+            if (iceTextureURL) {
+                const matName = "mat_glass"
+                
+                // Регистрируем новый материал glass с синеватым оттенком
+                // Используем color для добавления синего оттенка к текстуре ice
+                // [R, G, B, Alpha] - синеватый оттенок: увеличиваем синий канал, уменьшаем красный и зеленый
+                noa.registry.registerMaterial(matName, {
+                    textureURL: iceTextureURL,
+                    color: [0.5, 0.6, 1.0, 0.75] // Синеватый оттенок с прозрачностью (более синий чем ice)
+                })
+                
+                materials['glass'] = matName
+                console.log('✅ Glass использует материал ice с синеватым оттенком')
+                
+                // Регистрируем блок glass как прозрачный
+                if (!blocks['glass']) {
+                    // @ts-ignore
+                    let currentCounter = window.blockIdCounter || blockIdCounter
+                    
+                    blocks['glass'] = noa.registry.registerBlock(currentCounter, {
+                        material: materials['glass'],
+                        opaque: false
+                    })
+                    
+                    currentCounter++
+                    // @ts-ignore
+                    window.blockIdCounter = currentCounter
+                    blockIdCounter = currentCounter
+                    
+                    console.log(`✔ Блок glass зарегистрирован (ID: ${blocks['glass']}) с текстурой ice, синеватый, прозрачный`)
+                    
+                    // Обновляем глобальный blocksMap
+                    // @ts-ignore
+                    if (window.blocksMap) {
+                        // @ts-ignore
+                        window.blocksMap['glass'] = blocks['glass']
+                        console.log(`✅ Обновлен глобальный blocksMap: glass -> ${blocks['glass']}`)
+                    }
+                    
+                    // Отправляем событие о регистрации
+                    window.dispatchEvent(new CustomEvent('blockRegistered', {
+                        detail: { blockName: 'glass', blockId: blocks['glass'] }
+                    }))
+                }
+            } else {
+                console.warn('⚠ URL текстуры ice не найден для glass. Убедитесь, что ice зарегистрирован.')
+            }
+            return
+        }
+        
         const matName = "mat_" + textureName
         const make = b64 => "data:image/png;base64," + b64
         
         console.log(`🎨 Регистрация материала для текстуры: ${textureName}`)
         
-        // Регистрируем новый материал
-        noa.registry.registerMaterial(matName, {
+        // Определяем, нужно ли сделать материал прозрачным (для glass)
+        const isGlass = textureName.includes('glass')
+        const materialOptions = {
             textureURL: make(textureData)
-        })
+        }
+        
+        // Если это glass, добавляем прозрачность к материалу
+        if (isGlass) {
+            // Используем альфа-канал для прозрачности (аналогично water)
+            // Можно также использовать color с альфа-каналом
+            console.log('🔷 Материал glass будет прозрачным')
+        }
+        
+        // Регистрируем новый материал
+        noa.registry.registerMaterial(matName, materialOptions)
         materials[textureName] = matName
         
         console.log(`✅ Материал зарегистрирован: ${matName}`)
@@ -262,13 +345,22 @@ if (materials["grass_dry_top"]) {
                     // @ts-ignore
                     let currentCounter = window.blockIdCounter || blockIdCounter
                     
-                    blocks[blockName] = noa.registry.registerBlock(currentCounter, {
+                    // Настройки блока
+                    const blockOptions = {
                         material: [
                             materials[topName],
                             materials[topName],
                             materials[sideName]
                         ]
-                    })
+                    }
+                    
+                    // Если это glass, делаем его прозрачным
+                    if (blockName === 'glass') {
+                        blockOptions.opaque = false
+                        console.log('🔷 Блок glass будет прозрачным')
+                    }
+                    
+                    blocks[blockName] = noa.registry.registerBlock(currentCounter, blockOptions)
                     
                     // Обновляем счетчик
                     currentCounter++
@@ -352,9 +444,18 @@ if (materials["grass_dry_top"]) {
                 // @ts-ignore
                 let currentCounter = window.blockIdCounter || blockIdCounter
                 
-                blocks[blockName] = noa.registry.registerBlock(currentCounter, {
+                // Настройки блока
+                const blockOptions = {
                     material: materials[textureName]
-                })
+                }
+                
+                // Если это glass, делаем его прозрачным
+                if (blockName === 'glass') {
+                    blockOptions.opaque = false
+                    console.log('🔷 Блок glass будет прозрачным (простой блок)')
+                }
+                
+                blocks[blockName] = noa.registry.registerBlock(currentCounter, blockOptions)
                 
                 // Обновляем счетчик
                 currentCounter++
