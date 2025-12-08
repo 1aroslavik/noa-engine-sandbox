@@ -896,18 +896,20 @@ function registerTickHandler() {
             }
 
             // АТАКА МЕДВЕДЯ НА ИГРОКА (каждый тик)
-            if (playerPos && isPlayerInAggroRange) {
+            if (playerPos) {
                 const dx = playerPos[0] - pos[0]
                 const dy = playerPos[1] - pos[1]
                 const dz = playerPos[2] - pos[2]
                 const currentDistance = Math.sqrt(dx * dx + dy * dy + dz * dz)
                 
+                // Проверяем, находимся ли в зоне атаки (2 блока)
                 if (currentDistance <= ATTACK_RANGE) {
                     // Инициализируем таймер атаки, если его еще нет
-                    if (bear.attackCooldown === undefined || bear.attackCooldown === null) {
+                    if (bear.attackCooldown === undefined || bear.attackCooldown === null || bear.attackCooldown < 0) {
                         bear.attackCooldown = 0
                     }
                     
+                    // Уменьшаем кулдаун каждый тик
                     bear.attackCooldown--
                     
                     // Атакуем каждые 60 тиков (примерно раз в секунду)
@@ -918,14 +920,7 @@ function registerTickHandler() {
                         console.log(`🐻 Медведь атаковал игрока! Урон: ${damage}, Расстояние: ${currentDistance.toFixed(2)}`)
                     }
                 } else {
-                    // Игрок в зоне агрессии, но не в зоне атаки - сбрасываем кулдаун
-                    if (bear.attackCooldown > 0) {
-                        bear.attackCooldown = 0
-                    }
-                }
-            } else {
-                // Игрок не в зоне агрессии - сбрасываем кулдаун
-                if (bear.attackCooldown !== undefined) {
+                    // Игрок не в зоне атаки - сбрасываем кулдаун для немедленной атаки при приближении
                     bear.attackCooldown = 0
                 }
             }
@@ -1882,6 +1877,9 @@ function registerTickHandler() {
                 bear.angle = bear.targetAngle
             }
 
+            // Сохраняем rotationAngleDiff для использования ниже
+            const savedRotationAngleDiff = rotationAngleDiff
+
             // Проверка препятствий и движение
             if (under !== 0 && Math.abs(body.velocity[1]) < 0.1) {
                 const checkDistance = (bearWidth / 2) + 0.15
@@ -1933,7 +1931,7 @@ function registerTickHandler() {
             }
             
             // Движение в направлении головы
-            const angleDiffForMovement = Math.abs(rotationAngleDiff)
+            const angleDiffForMovement = Math.abs(savedRotationAngleDiff)
             const isHeadAligned = angleDiffForMovement < 0.3
             const moveSpeed = bear.speed * 4
             const speedMultiplier = isHeadAligned ? 1.0 : Math.max(0.3, 1.0 - angleDiffForMovement / Math.PI)
@@ -1975,9 +1973,8 @@ function registerTickHandler() {
                 body.velocity[2] *= 0.9
             }
         }
-    }
-    ) // закрытие стрелочной функции currentNoa.on('tick', () => {
-} // закрытие функции registerTickHandler()
+    })
+}
 
 // Регистрируем обработчик после небольшой задержки
 setTimeout(registerTickHandler, 100)
