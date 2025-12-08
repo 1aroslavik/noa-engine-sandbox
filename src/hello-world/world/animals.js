@@ -597,17 +597,30 @@ function registerTickHandler() {
         const pigWidth = body.width || 0.7
         const checkHeight = Math.ceil(pigHeight)
         
-        // Проверка застревания: проверяем только центр тела (упрощенная проверка)
+        // Улучшенная проверка застревания: проверяем блоки вокруг животного
         const centerBlockY = Math.floor(pos[1])
         const centerBlockX = Math.floor(pos[0])
         const centerBlockZ = Math.floor(pos[2])
         
-        const blockAtFeet = currentNoa.getBlock(centerBlockX, centerBlockY, centerBlockZ)
-        const blockAtBody = currentNoa.getBlock(centerBlockX, centerBlockY + 1, centerBlockZ)
-        const blockAtHead = checkHeight > 1 ? currentNoa.getBlock(centerBlockX, centerBlockY + 2, centerBlockZ) : 0
+        // Проверяем блоки на разных уровнях и позициях (центр, углы)
+        const checkPositions = [
+            [centerBlockX, centerBlockY, centerBlockZ], // Центр - ноги
+            [centerBlockX, centerBlockY + 1, centerBlockZ], // Центр - тело
+            [centerBlockX, centerBlockY + 2, centerBlockZ], // Центр - голова
+            [centerBlockX - 1, centerBlockY, centerBlockZ], // Слева - ноги
+            [centerBlockX + 1, centerBlockY, centerBlockZ], // Справа - ноги
+            [centerBlockX, centerBlockY, centerBlockZ - 1], // Сзади - ноги
+            [centerBlockX, centerBlockY, centerBlockZ + 1], // Впереди - ноги
+        ]
         
-        // Проверка 1: Свинья внутри блока
-        const isInsideBlock = blockAtFeet !== 0 || blockAtBody !== 0 || blockAtHead !== 0
+        let isInsideBlock = false
+        for (const [bx, by, bz] of checkPositions) {
+            const block = currentNoa.getBlock(bx, by, bz)
+            if (block !== 0) {
+                isInsideBlock = true
+                break
+            }
+        }
         
         // Проверка 2: Свинья не двигается (проверяем каждые 20 тиков = ~0.33 секунды)
         let isNotMoving = false
@@ -698,7 +711,18 @@ function registerTickHandler() {
                 // Обновляем последнюю позицию
                 pig.lastPosition = [freeX, freeY, freeZ]
                 // Меняем направление, чтобы не застрять снова (голова повернется сама)
-                pig.targetAngle = Math.random() * Math.PI * 2
+                // Ограничиваем поворот до ±90° от текущего направления
+                const currentMovementAngle = pig.angle !== undefined ? pig.angle : (pig.currentRotation + Math.PI / 2)
+                const randomAngle = Math.random() * Math.PI * 2
+                let angleDiff = randomAngle - currentMovementAngle
+                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+                const maxTurn = Math.PI / 2
+                if (angleDiff > maxTurn) angleDiff = maxTurn
+                if (angleDiff < -maxTurn) angleDiff = -maxTurn
+                pig.targetAngle = currentMovementAngle + angleDiff
+                while (pig.targetAngle < 0) pig.targetAngle += 2 * Math.PI
+                while (pig.targetAngle >= 2 * Math.PI) pig.targetAngle -= 2 * Math.PI
             } else {
                 // Если не нашли место, выталкиваем вверх и в случайную сторону
                 const pushAngle = Math.random() * Math.PI * 2
@@ -710,7 +734,17 @@ function registerTickHandler() {
                 currentNoa.entities.setPosition(id, newPos)
                 pig.lastPosition = [newPos[0], newPos[1], newPos[2]]
                 // Меняем направление (голова повернется сама)
-                pig.targetAngle = pushAngle
+                // Ограничиваем поворот до ±90° от текущего направления
+                const currentMovementAngle = pig.angle !== undefined ? pig.angle : (pig.currentRotation + Math.PI / 2)
+                let angleDiff = pushAngle - currentMovementAngle
+                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+                const maxTurn = Math.PI / 2
+                if (angleDiff > maxTurn) angleDiff = maxTurn
+                if (angleDiff < -maxTurn) angleDiff = -maxTurn
+                pig.targetAngle = currentMovementAngle + angleDiff
+                while (pig.targetAngle < 0) pig.targetAngle += 2 * Math.PI
+                while (pig.targetAngle >= 2 * Math.PI) pig.targetAngle -= 2 * Math.PI
             }
             continue
         }
@@ -726,8 +760,34 @@ function registerTickHandler() {
         }
 
         // Периодическая смена направления (каждые 3-8 секунд)
+        // Ограничиваем повороты до 90° в каждую сторону, чтобы не шли назад
         if (pig.directionChangeTimer <= 0) {
-            pig.targetAngle = Math.random() * Math.PI * 2
+            // Получаем текущий угол движения
+            const currentMovementAngle = pig.angle !== undefined ? pig.angle : (pig.currentRotation + Math.PI / 2)
+            
+            // Выбираем случайный угол, но ограничиваем его до ±90° от текущего направления
+            const randomAngle = Math.random() * Math.PI * 2
+            let angleDiff = randomAngle - currentMovementAngle
+            
+            // Нормализуем разницу углов в диапазон [-π, π]
+            while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+            while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+            
+            // Ограничиваем поворот до ±90° (π/2) в каждую сторону
+            const maxTurn = Math.PI / 2
+            if (angleDiff > maxTurn) {
+                angleDiff = maxTurn
+            } else if (angleDiff < -maxTurn) {
+                angleDiff = -maxTurn
+            }
+            
+            // Новый целевой угол = текущий угол + ограниченный поворот
+            pig.targetAngle = currentMovementAngle + angleDiff
+            
+            // Нормализуем угол в диапазон [0, 2π]
+            while (pig.targetAngle < 0) pig.targetAngle += 2 * Math.PI
+            while (pig.targetAngle >= 2 * Math.PI) pig.targetAngle -= 2 * Math.PI
+            
             pig.directionChangeTimer = 180 + Math.floor(Math.random() * 300) // 3-8 секунд
         }
 
@@ -754,57 +814,142 @@ function registerTickHandler() {
             pig.angle = pig.targetAngle
         }
         
-        // Упрощенная проверка препятствий - только для прыжков
-        // Используем текущий угол поворота для проверки препятствий впереди
-        // Используем ту же формулу, что и для движения
-        const currentMovementAngle = pig.currentRotation + Math.PI / 2
+        // Улучшенная проверка препятствий и прыжков
+        // Проверяем блоки впереди на разных уровнях
         if (under !== 0 && Math.abs(body.velocity[1]) < 0.1) {
-            const checkDistance = 0.4
-            const fx = pos[0] + Math.cos(currentMovementAngle) * checkDistance
-            const fz = pos[2] + Math.sin(currentMovementAngle) * checkDistance
+            const checkDistance = (pigWidth / 2) + 0.15 // Половина ширины + запас
+            const fx = pos[0] + Math.sin(pig.currentRotation) * checkDistance
+            const fz = pos[2] + Math.cos(pig.currentRotation) * checkDistance
             const currentY = Math.floor(pos[1])
+            const feetY = currentY // Уровень ног
+            const bodyY = currentY + 1 // Уровень тела
+            const headY = checkHeight > 1 ? currentY + 2 : currentY + 1 // Уровень головы
             
-            const frontBlock = currentNoa.getBlock(Math.floor(fx), currentY, Math.floor(fz))
-            const frontBlockAbove = currentNoa.getBlock(Math.floor(fx), currentY + 1, Math.floor(fz))
+            const blockAtFeet = currentNoa.getBlock(Math.floor(fx), feetY, Math.floor(fz))
+            const blockAtBody = currentNoa.getBlock(Math.floor(fx), bodyY, Math.floor(fz))
+            const blockAtHead = currentNoa.getBlock(Math.floor(fx), headY, Math.floor(fz))
             
-            // Если препятствие впереди - прыгаем В НАПРАВЛЕНИИ ДВИЖЕНИЯ
-            if (frontBlock !== 0 || frontBlockAbove !== 0) {
-                if (pig.jumpCooldown <= 0) {
-                    // Проверяем, есть ли место сверху для прыжка
-                    const jumpCheckY = currentY + 2
-                    const jumpCheckBlock = currentNoa.getBlock(Math.floor(fx), jumpCheckY, Math.floor(fz))
-                    
-                    if (jumpCheckBlock === 0) {
-                        // Прыгаем ВПЕРЕД в направлении головы!
-                        body.velocity[1] = 0.35
-                        // Добавляем горизонтальную скорость для прыжка вперед в направлении головы
-                        body.velocity[0] = Math.cos(currentMovementAngle) * pig.speed * 2
-                        body.velocity[2] = Math.sin(currentMovementAngle) * pig.speed * 2
-                        pig.jumpCooldown = 30
-                    } else {
-                        // Не можем перепрыгнуть - меняем направление (голова повернется сама)
-                        pig.targetAngle = Math.random() * Math.PI * 2
-                        pig.directionChangeTimer = 15
-                    }
+            // Если блок на уровне ног - это препятствие, меняем направление
+            if (blockAtFeet !== 0) {
+                // Препятствие на уровне ног - меняем направление
+                const currentMovementAngle = pig.angle !== undefined ? pig.angle : (pig.currentRotation + Math.PI / 2)
+                const randomAngle = Math.random() * Math.PI * 2
+                let angleDiff = randomAngle - currentMovementAngle
+                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+                const maxTurn = Math.PI / 2
+                if (angleDiff > maxTurn) angleDiff = maxTurn
+                if (angleDiff < -maxTurn) angleDiff = -maxTurn
+                pig.targetAngle = currentMovementAngle + angleDiff
+                while (pig.targetAngle < 0) pig.targetAngle += 2 * Math.PI
+                while (pig.targetAngle >= 2 * Math.PI) pig.targetAngle -= 2 * Math.PI
+                pig.directionChangeTimer = 15
+            }
+            // Если блок на уровне тела, но не на уровне ног - прыгаем
+            else if (blockAtBody !== 0 && blockAtFeet === 0 && pig.jumpCooldown <= 0) {
+                // Блок выше уровня ног - проверяем, можем ли перепрыгнуть
+                const jumpCheckY = headY + 1 // Проверяем место над головой
+                const jumpCheckBlock = currentNoa.getBlock(Math.floor(fx), jumpCheckY, Math.floor(fz))
+                
+                if (jumpCheckBlock === 0) {
+                    // Можем перепрыгнуть - прыгаем!
+                    body.velocity[1] = 0.4
+                    body.velocity[0] = Math.sin(pig.currentRotation) * pig.speed * 2
+                    body.velocity[2] = Math.cos(pig.currentRotation) * pig.speed * 2
+                    pig.jumpCooldown = 30
+                } else {
+                    // Не можем перепрыгнуть - меняем направление
+                    const currentMovementAngle = pig.angle !== undefined ? pig.angle : (pig.currentRotation + Math.PI / 2)
+                    const randomAngle = Math.random() * Math.PI * 2
+                    let angleDiff = randomAngle - currentMovementAngle
+                    while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+                    while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+                    const maxTurn = Math.PI / 2
+                    if (angleDiff > maxTurn) angleDiff = maxTurn
+                    if (angleDiff < -maxTurn) angleDiff = -maxTurn
+                    pig.targetAngle = currentMovementAngle + angleDiff
+                    while (pig.targetAngle < 0) pig.targetAngle += 2 * Math.PI
+                    while (pig.targetAngle >= 2 * Math.PI) pig.targetAngle -= 2 * Math.PI
+                    pig.directionChangeTimer = 15
                 }
+            }
+            // Если блок на уровне головы - меняем направление
+            else if (blockAtHead !== 0 && blockAtFeet === 0 && blockAtBody === 0) {
+                // Блок только на уровне головы - меняем направление
+                const currentMovementAngle = pig.angle !== undefined ? pig.angle : (pig.currentRotation + Math.PI / 2)
+                const randomAngle = Math.random() * Math.PI * 2
+                let angleDiff = randomAngle - currentMovementAngle
+                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+                const maxTurn = Math.PI / 2
+                if (angleDiff > maxTurn) angleDiff = maxTurn
+                if (angleDiff < -maxTurn) angleDiff = -maxTurn
+                pig.targetAngle = currentMovementAngle + angleDiff
+                while (pig.targetAngle < 0) pig.targetAngle += 2 * Math.PI
+                while (pig.targetAngle >= 2 * Math.PI) pig.targetAngle -= 2 * Math.PI
+                pig.directionChangeTimer = 15
             }
         }
         
         // Движение - ВСЕГДА в направлении головы (куда смотрит голова)
-        // Используем targetAngle напрямую для движения (когда голова достаточно повернута)
-        // Или currentRotation + π/2 для плавного поворота
-        // Формула: movementAngle = currentRotation + π/2 (направление головы)
-        const movementAngle = pig.currentRotation + Math.PI / 2
+        // В Babylon.js: rotation.y = 0 означает смотрение вперед по +Z
+        // Для движения в направлении головы: velocity[0] = sin(rotation.y), velocity[2] = cos(rotation.y)
+        // Если голова еще не повернута достаточно, не двигаемся (или двигаемся медленнее)
+        const angleDiffForMovement = Math.abs(angleDiff)
+        const isHeadAligned = angleDiffForMovement < 0.3 // Голова достаточно повернута
+        
+        // Вычисляем угол движения из угла поворота головы
+        // currentRotation - это угол поворота меша (rotation.y)
+        // Для движения: X = sin(rotation.y), Z = cos(rotation.y)
         const moveSpeed = pig.speed * 4
+        
+        // Если голова не повернута достаточно, замедляем движение
+        const speedMultiplier = isHeadAligned ? 1.0 : Math.max(0.3, 1.0 - angleDiffForMovement / Math.PI)
         
         // Проверяем, стоим ли на земле
         const isOnGround = under !== 0 || (body.velocity[1] >= -0.1 && body.velocity[1] < 0.3)
         
         if (isOnGround) {
-            // Идем строго вперед в направлении головы
-            // Формула для движения: X = cos(angle), Z = sin(angle)
-            body.velocity[0] = Math.cos(movementAngle) * moveSpeed
-            body.velocity[2] = Math.sin(movementAngle) * moveSpeed
+            // ПРОВЕРКА ПРЕПЯТСТВИЙ ПЕРЕД ДВИЖЕНИЕМ - чтобы не заходить в блоки
+            // Проверяем блоки впереди на расстоянии равном половине ширины + небольшой запас
+            const checkDistance = (pigWidth / 2) + 0.1 // Половина ширины + небольшой запас
+            const nextX = pos[0] + Math.sin(pig.currentRotation) * checkDistance
+            const nextZ = pos[2] + Math.cos(pig.currentRotation) * checkDistance
+            const currentY = Math.floor(pos[1])
+            
+            // Проверяем блоки на разных высотах (ноги, тело, голова)
+            const blockAtFeet = currentNoa.getBlock(Math.floor(nextX), currentY, Math.floor(nextZ))
+            const blockAtBody = currentNoa.getBlock(Math.floor(nextX), currentY + 1, Math.floor(nextZ))
+            const blockAtHead = checkHeight > 1 ? currentNoa.getBlock(Math.floor(nextX), currentY + 2, Math.floor(nextZ)) : 0
+            
+            // Если есть препятствие впереди, не двигаемся (или меняем направление)
+            if (blockAtFeet !== 0 || blockAtBody !== 0 || blockAtHead !== 0) {
+                // Препятствие впереди - останавливаемся и меняем направление
+                body.velocity[0] = 0
+                body.velocity[2] = 0
+                
+                // Меняем направление (голова повернется сама)
+                const currentMovementAngle = pig.angle !== undefined ? pig.angle : (pig.currentRotation + Math.PI / 2)
+                const randomAngle = Math.random() * Math.PI * 2
+                let turnAngleDiff = randomAngle - currentMovementAngle
+                while (turnAngleDiff > Math.PI) turnAngleDiff -= 2 * Math.PI
+                while (turnAngleDiff < -Math.PI) turnAngleDiff += 2 * Math.PI
+                const maxTurn = Math.PI / 2
+                if (turnAngleDiff > maxTurn) turnAngleDiff = maxTurn
+                if (turnAngleDiff < -maxTurn) turnAngleDiff = -maxTurn
+                pig.targetAngle = currentMovementAngle + turnAngleDiff
+                while (pig.targetAngle < 0) pig.targetAngle += 2 * Math.PI
+                while (pig.targetAngle >= 2 * Math.PI) pig.targetAngle -= 2 * Math.PI
+                pig.directionChangeTimer = 15
+            } else {
+                // Нет препятствий - идем строго вперед в направлении головы
+                // Формула для движения в Babylon.js: X = sin(rotation.y), Z = cos(rotation.y)
+                body.velocity[0] = Math.sin(pig.currentRotation) * moveSpeed * speedMultiplier
+                body.velocity[2] = Math.cos(pig.currentRotation) * moveSpeed * speedMultiplier
+                
+                // Обновляем pig.angle для отслеживания текущего направления движения
+                pig.angle = pig.currentRotation + Math.PI / 2
+            }
         } else {
             // Падаем - замедляем горизонтальное движение
             body.velocity[0] *= 0.9
@@ -839,15 +984,30 @@ function registerTickHandler() {
         const cowHeight = body.height || 1.5
         const checkHeight = Math.ceil(cowHeight)
         
+        // Улучшенная проверка застревания: проверяем блоки вокруг животного
         const centerBlockY = Math.floor(pos[1])
         const centerBlockX = Math.floor(pos[0])
         const centerBlockZ = Math.floor(pos[2])
         
-        const blockAtFeet = currentNoa.getBlock(centerBlockX, centerBlockY, centerBlockZ)
-        const blockAtBody = currentNoa.getBlock(centerBlockX, centerBlockY + 1, centerBlockZ)
-        const blockAtHead = checkHeight > 1 ? currentNoa.getBlock(centerBlockX, centerBlockY + 2, centerBlockZ) : 0
+        // Проверяем блоки на разных уровнях и позициях (центр, углы)
+        const checkPositions = [
+            [centerBlockX, centerBlockY, centerBlockZ], // Центр - ноги
+            [centerBlockX, centerBlockY + 1, centerBlockZ], // Центр - тело
+            [centerBlockX, centerBlockY + 2, centerBlockZ], // Центр - голова
+            [centerBlockX - 1, centerBlockY, centerBlockZ], // Слева - ноги
+            [centerBlockX + 1, centerBlockY, centerBlockZ], // Справа - ноги
+            [centerBlockX, centerBlockY, centerBlockZ - 1], // Сзади - ноги
+            [centerBlockX, centerBlockY, centerBlockZ + 1], // Впереди - ноги
+        ]
         
-        const isInsideBlock = blockAtFeet !== 0 || blockAtBody !== 0 || blockAtHead !== 0
+        let isInsideBlock = false
+        for (const [bx, by, bz] of checkPositions) {
+            const block = currentNoa.getBlock(bx, by, bz)
+            if (block !== 0) {
+                isInsideBlock = true
+                break
+            }
+        }
         
         let isNotMoving = false
         if (cow.stuckCheckCounter >= 20) {
@@ -915,7 +1075,18 @@ function registerTickHandler() {
                 body.velocity[2] = 0
                 cow.lastPosition = [freeX, freeY, freeZ]
                 // Меняем направление (голова повернется сама)
-                cow.targetAngle = Math.random() * Math.PI * 2
+                // Ограничиваем поворот до ±90° от текущего направления
+                const currentMovementAngle = cow.angle !== undefined ? cow.angle : (cow.currentRotation + Math.PI / 2)
+                const randomAngle = Math.random() * Math.PI * 2
+                let angleDiff = randomAngle - currentMovementAngle
+                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+                const maxTurn = Math.PI / 2
+                if (angleDiff > maxTurn) angleDiff = maxTurn
+                if (angleDiff < -maxTurn) angleDiff = -maxTurn
+                cow.targetAngle = currentMovementAngle + angleDiff
+                while (cow.targetAngle < 0) cow.targetAngle += 2 * Math.PI
+                while (cow.targetAngle >= 2 * Math.PI) cow.targetAngle -= 2 * Math.PI
             } else {
                 const pushAngle = Math.random() * Math.PI * 2
                 body.velocity[1] = 0.8
@@ -924,7 +1095,17 @@ function registerTickHandler() {
                 const newPos = [pos[0], pos[1] + 2, pos[2]]
                 currentNoa.entities.setPosition(id, newPos)
                 cow.lastPosition = [newPos[0], newPos[1], newPos[2]]
-                cow.targetAngle = pushAngle // Голова повернется сама
+                // Ограничиваем поворот до ±90° от текущего направления
+                const currentMovementAngle = cow.angle !== undefined ? cow.angle : (cow.currentRotation + Math.PI / 2)
+                let angleDiff = pushAngle - currentMovementAngle
+                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+                const maxTurn = Math.PI / 2
+                if (angleDiff > maxTurn) angleDiff = maxTurn
+                if (angleDiff < -maxTurn) angleDiff = -maxTurn
+                cow.targetAngle = currentMovementAngle + angleDiff
+                while (cow.targetAngle < 0) cow.targetAngle += 2 * Math.PI
+                while (cow.targetAngle >= 2 * Math.PI) cow.targetAngle -= 2 * Math.PI
             }
             continue
         }
@@ -937,8 +1118,35 @@ function registerTickHandler() {
             body.velocity[1] = -0.1
         }
 
+        // Периодическая смена направления (каждые 3-8 секунд)
+        // Ограничиваем повороты до 90° в каждую сторону, чтобы не шли назад
         if (cow.directionChangeTimer <= 0) {
-            cow.targetAngle = Math.random() * Math.PI * 2
+            // Получаем текущий угол движения
+            const currentMovementAngle = cow.angle !== undefined ? cow.angle : (cow.currentRotation + Math.PI / 2)
+            
+            // Выбираем случайный угол, но ограничиваем его до ±90° от текущего направления
+            const randomAngle = Math.random() * Math.PI * 2
+            let angleDiff = randomAngle - currentMovementAngle
+            
+            // Нормализуем разницу углов в диапазон [-π, π]
+            while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+            while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+            
+            // Ограничиваем поворот до ±90° (π/2) в каждую сторону
+            const maxTurn = Math.PI / 2
+            if (angleDiff > maxTurn) {
+                angleDiff = maxTurn
+            } else if (angleDiff < -maxTurn) {
+                angleDiff = -maxTurn
+            }
+            
+            // Новый целевой угол = текущий угол + ограниченный поворот
+            cow.targetAngle = currentMovementAngle + angleDiff
+            
+            // Нормализуем угол в диапазон [0, 2π]
+            while (cow.targetAngle < 0) cow.targetAngle += 2 * Math.PI
+            while (cow.targetAngle >= 2 * Math.PI) cow.targetAngle -= 2 * Math.PI
+            
             cow.directionChangeTimer = 180 + Math.floor(Math.random() * 300)
         }
 
@@ -959,47 +1167,149 @@ function registerTickHandler() {
             cow.angle = cow.targetAngle
         }
         
-        const currentMovementAngle = cow.currentRotation + Math.PI / 2
+        // Улучшенная проверка препятствий и прыжков
+        // Проверяем блоки впереди на разных уровнях
         if (under !== 0 && Math.abs(body.velocity[1]) < 0.1) {
-            const checkDistance = 0.4
-            const fx = pos[0] + Math.cos(currentMovementAngle) * checkDistance
-            const fz = pos[2] + Math.sin(currentMovementAngle) * checkDistance
+            const cowWidth = body.width || 0.9
+            const cowHeight = body.height || 1.4
+            const checkHeight = Math.ceil(cowHeight)
+            const checkDistance = (cowWidth / 2) + 0.15 // Половина ширины + запас
+            const fx = pos[0] + Math.sin(cow.currentRotation) * checkDistance
+            const fz = pos[2] + Math.cos(cow.currentRotation) * checkDistance
             const currentY = Math.floor(pos[1])
+            const feetY = currentY // Уровень ног
+            const bodyY = currentY + 1 // Уровень тела
+            const headY = checkHeight > 1 ? currentY + 2 : currentY + 1 // Уровень головы
             
-            const frontBlock = currentNoa.getBlock(Math.floor(fx), currentY, Math.floor(fz))
-            const frontBlockAbove = currentNoa.getBlock(Math.floor(fx), currentY + 1, Math.floor(fz))
+            const blockAtFeet = currentNoa.getBlock(Math.floor(fx), feetY, Math.floor(fz))
+            const blockAtBody = currentNoa.getBlock(Math.floor(fx), bodyY, Math.floor(fz))
+            const blockAtHead = currentNoa.getBlock(Math.floor(fx), headY, Math.floor(fz))
             
-            if (frontBlock !== 0 || frontBlockAbove !== 0) {
-                if (cow.jumpCooldown <= 0) {
-                    const jumpCheckY = currentY + 2
-                    const jumpCheckBlock = currentNoa.getBlock(Math.floor(fx), jumpCheckY, Math.floor(fz))
-                    
-                    if (jumpCheckBlock === 0) {
-                        body.velocity[1] = 0.35
-                        body.velocity[0] = Math.cos(currentMovementAngle) * cow.speed * 2
-                        body.velocity[2] = Math.sin(currentMovementAngle) * cow.speed * 2
-                        cow.jumpCooldown = 30
-                    } else {
-                        // Не можем перепрыгнуть - меняем направление (голова повернется сама)
-                        cow.targetAngle = Math.random() * Math.PI * 2
-                        cow.directionChangeTimer = 15
-                    }
+            // Если блок на уровне ног - это препятствие, меняем направление
+            if (blockAtFeet !== 0) {
+                // Препятствие на уровне ног - меняем направление
+                const currentMovementAngle = cow.angle !== undefined ? cow.angle : (cow.currentRotation + Math.PI / 2)
+                const randomAngle = Math.random() * Math.PI * 2
+                let angleDiff = randomAngle - currentMovementAngle
+                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+                const maxTurn = Math.PI / 2
+                if (angleDiff > maxTurn) angleDiff = maxTurn
+                if (angleDiff < -maxTurn) angleDiff = -maxTurn
+                cow.targetAngle = currentMovementAngle + angleDiff
+                while (cow.targetAngle < 0) cow.targetAngle += 2 * Math.PI
+                while (cow.targetAngle >= 2 * Math.PI) cow.targetAngle -= 2 * Math.PI
+                cow.directionChangeTimer = 15
+            }
+            // Если блок на уровне тела, но не на уровне ног - прыгаем
+            else if (blockAtBody !== 0 && blockAtFeet === 0 && cow.jumpCooldown <= 0) {
+                // Блок выше уровня ног - проверяем, можем ли перепрыгнуть
+                const jumpCheckY = headY + 1 // Проверяем место над головой
+                const jumpCheckBlock = currentNoa.getBlock(Math.floor(fx), jumpCheckY, Math.floor(fz))
+                
+                if (jumpCheckBlock === 0) {
+                    // Можем перепрыгнуть - прыгаем!
+                    body.velocity[1] = 0.4
+                    body.velocity[0] = Math.sin(cow.currentRotation) * cow.speed * 2
+                    body.velocity[2] = Math.cos(cow.currentRotation) * cow.speed * 2
+                    cow.jumpCooldown = 30
+                } else {
+                    // Не можем перепрыгнуть - меняем направление
+                    const currentMovementAngle = cow.angle !== undefined ? cow.angle : (cow.currentRotation + Math.PI / 2)
+                    const randomAngle = Math.random() * Math.PI * 2
+                    let angleDiff = randomAngle - currentMovementAngle
+                    while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+                    while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+                    const maxTurn = Math.PI / 2
+                    if (angleDiff > maxTurn) angleDiff = maxTurn
+                    if (angleDiff < -maxTurn) angleDiff = -maxTurn
+                    cow.targetAngle = currentMovementAngle + angleDiff
+                    while (cow.targetAngle < 0) cow.targetAngle += 2 * Math.PI
+                    while (cow.targetAngle >= 2 * Math.PI) cow.targetAngle -= 2 * Math.PI
+                    cow.directionChangeTimer = 15
                 }
+            }
+            // Если блок на уровне головы - меняем направление
+            else if (blockAtHead !== 0 && blockAtFeet === 0 && blockAtBody === 0) {
+                // Блок только на уровне головы - меняем направление
+                const currentMovementAngle = cow.angle !== undefined ? cow.angle : (cow.currentRotation + Math.PI / 2)
+                const randomAngle = Math.random() * Math.PI * 2
+                let angleDiff = randomAngle - currentMovementAngle
+                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+                const maxTurn = Math.PI / 2
+                if (angleDiff > maxTurn) angleDiff = maxTurn
+                if (angleDiff < -maxTurn) angleDiff = -maxTurn
+                cow.targetAngle = currentMovementAngle + angleDiff
+                while (cow.targetAngle < 0) cow.targetAngle += 2 * Math.PI
+                while (cow.targetAngle >= 2 * Math.PI) cow.targetAngle -= 2 * Math.PI
+                cow.directionChangeTimer = 15
             }
         }
         
         // Движение - ВСЕГДА в направлении головы (куда смотрит голова)
-        // Используем ту же формулу, что и для свиней
-        const movementAngle = cow.currentRotation + Math.PI / 2
+        // В Babylon.js: rotation.y = 0 означает смотрение вперед по +Z
+        // Для движения в направлении головы: velocity[0] = sin(rotation.y), velocity[2] = cos(rotation.y)
+        // Если голова еще не повернута достаточно, не двигаемся (или двигаемся медленнее)
+        const angleDiffForMovement = Math.abs(angleDiff)
+        const isHeadAligned = angleDiffForMovement < 0.3 // Голова достаточно повернута
+        
+        // Вычисляем угол движения из угла поворота головы
+        // currentRotation - это угол поворота меша (rotation.y)
+        // Для движения: X = sin(rotation.y), Z = cos(rotation.y)
         const moveSpeed = cow.speed * 4
+        
+        // Если голова не повернута достаточно, замедляем движение
+        const speedMultiplier = isHeadAligned ? 1.0 : Math.max(0.3, 1.0 - angleDiffForMovement / Math.PI)
         
         const isOnGround = under !== 0 || (body.velocity[1] >= -0.1 && body.velocity[1] < 0.3)
         
         if (isOnGround) {
-            // Идем строго вперед в направлении головы
-            // Используем ту же формулу, что и для прыжков (cos для X, sin для Z)
-            body.velocity[0] = Math.cos(movementAngle) * moveSpeed
-            body.velocity[2] = Math.sin(movementAngle) * moveSpeed
+            // ПРОВЕРКА ПРЕПЯТСТВИЙ ПЕРЕД ДВИЖЕНИЕМ - чтобы не заходить в блоки
+            // Получаем размеры коровы из физического тела
+            const cowWidth = body.width || 0.9
+            const cowHeight = body.height || 1.4
+            const checkHeight = Math.ceil(cowHeight)
+            
+            // Проверяем блоки впереди на расстоянии равном половине ширины + небольшой запас
+            const checkDistance = (cowWidth / 2) + 0.1 // Половина ширины + небольшой запас
+            const nextX = pos[0] + Math.sin(cow.currentRotation) * checkDistance
+            const nextZ = pos[2] + Math.cos(cow.currentRotation) * checkDistance
+            const currentY = Math.floor(pos[1])
+            
+            // Проверяем блоки на разных высотах (ноги, тело, голова)
+            const blockAtFeet = currentNoa.getBlock(Math.floor(nextX), currentY, Math.floor(nextZ))
+            const blockAtBody = currentNoa.getBlock(Math.floor(nextX), currentY + 1, Math.floor(nextZ))
+            const blockAtHead = checkHeight > 1 ? currentNoa.getBlock(Math.floor(nextX), currentY + 2, Math.floor(nextZ)) : 0
+            
+            // Если есть препятствие впереди, не двигаемся (или меняем направление)
+            if (blockAtFeet !== 0 || blockAtBody !== 0 || blockAtHead !== 0) {
+                // Препятствие впереди - останавливаемся и меняем направление
+                body.velocity[0] = 0
+                body.velocity[2] = 0
+                
+                // Меняем направление (голова повернется сама)
+                const currentMovementAngle = cow.angle !== undefined ? cow.angle : (cow.currentRotation + Math.PI / 2)
+                const randomAngle = Math.random() * Math.PI * 2
+                let turnAngleDiff = randomAngle - currentMovementAngle
+                while (turnAngleDiff > Math.PI) turnAngleDiff -= 2 * Math.PI
+                while (turnAngleDiff < -Math.PI) turnAngleDiff += 2 * Math.PI
+                const maxTurn = Math.PI / 2
+                if (turnAngleDiff > maxTurn) turnAngleDiff = maxTurn
+                if (turnAngleDiff < -maxTurn) turnAngleDiff = -maxTurn
+                cow.targetAngle = currentMovementAngle + turnAngleDiff
+                while (cow.targetAngle < 0) cow.targetAngle += 2 * Math.PI
+                while (cow.targetAngle >= 2 * Math.PI) cow.targetAngle -= 2 * Math.PI
+                cow.directionChangeTimer = 15
+            } else {
+                // Нет препятствий - идем строго вперед в направлении головы
+                // Формула для движения в Babylon.js: X = sin(rotation.y), Z = cos(rotation.y)
+                body.velocity[0] = Math.sin(cow.currentRotation) * moveSpeed * speedMultiplier
+                body.velocity[2] = Math.cos(cow.currentRotation) * moveSpeed * speedMultiplier
+                
+                // Обновляем cow.angle для отслеживания текущего направления движения
+                cow.angle = cow.currentRotation + Math.PI / 2
+            }
         } else {
             // Падаем - замедляем горизонтальное движение
             body.velocity[0] *= 0.9
