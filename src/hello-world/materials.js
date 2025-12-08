@@ -377,6 +377,24 @@ export function createPigMaterial(noa, size = 'normal') {
     
     return material
 }
+// ------------------------------------------------------------
+// Материал для медведей (коричневый или белый)
+// ------------------------------------------------------------
+export function createBearMaterial(scene, type = "brown") {
+    const mat = new BABYLON.StandardMaterial("bearMat", scene)
+
+    if (type === "polar") {
+        // ❄ Белый медведь
+        mat.diffuseColor = new BABYLON.Color3(0.95, 0.95, 1.0)
+        mat.emissiveColor = new BABYLON.Color3(0.15, 0.15, 0.2)
+    } else {
+        // 🟤 Коричневый медведь
+        mat.diffuseColor = new BABYLON.Color3(0.45, 0.32, 0.22)
+        mat.emissiveColor = new BABYLON.Color3(0.1, 0.07, 0.05)
+    }
+
+    return mat
+}
 
 // ------------------------------------------------------------
 // Материал для коров (белый с черными пятнами)
