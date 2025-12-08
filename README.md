@@ -1,56 +1,101 @@
-# Generative Voxel Survival — Final Assessment Project
+# Generative Voxel Survival
 
 This project is a procedural voxel prototype built on the **NOA Engine** for the Procedural Content Generation course (UTM).  
 It implements terrain generation, runtime biomes, neural runtime textures, procedural vegetation, and generative animals.
 
 ---
 
-# 🧩 Features Implemented
-- Procedural terrain using layered noise  
-- Runtime biome classification (temperature + moisture + height)  
-- CVAE neural runtime textures (no PNG assets)  
-- L-system trees (oak & pine)  
-- Procedural mushrooms  
-- Generative animals (pigs, cows, bears) with movement AI and panic behavior  
-- Dynamic blocks & crafting texture combinations  
+# ▶ How to Run the Project
 
-This satisfies the requirements for **Grade 10 (Excellent)**.
+You can run the project **with make** (recommended)  
+or **without make** (manual commands).  
+Both options are provided below.
 
 ---
 
-# ▶ How to Run
+# OPTION 1 — Run with `make` (recommended)
 
-## 1️⃣ Install Python virtual environment
+##1 Create Python virtual environment
 ```sh
 make up
 ```
 
----
-
-## 2️⃣ Start CVAE Runtime Texture Server
+##2 Start CVAE Runtime Texture Server
 ```sh
 make run-textures
 ```
 
-This launches:
+Server will run here:
+```
+http://localhost:3001/generate
+```
 
-* CVAE model  
-* FastAPI server  
-* Runtime texture generator  
+##3 Start NOA Engine client
+```sh
+make start
+```
 
-Server runs at:
+Game opens at:
+```
+http://localhost:5173
+```
+
+---
+
+# OPTION 2 — Run WITHOUT `make`
+
+Use this if you're on **Windows without make**
+
+---
+
+#1 Create virtual environment
+
+### Windows
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+### Linux / macOS
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+---
+
+#2 Start CVAE Texture Server
+
+### Windows
+```powershell
+cd src/hello-world/vae
+python -m uvicorn server:app --reload --port 3001
+```
+
+### Linux / macOS
+```bash
+cd src/hello-world/vae
+../../.venv/bin/python3 -m uvicorn server:app --reload --port 3001
+```
+
+Server will be available at:
 ```
 http://localhost:3001/generate
 ```
 
 ---
 
-## 3️⃣ Start NOA Engine Client
+#3 Start NOA Engine Client
 ```sh
-make start
+npm install
+npm start
 ```
 
-Open the game in:
+Game opens at:
 ```
 http://localhost:5173
 ```
+---
+
