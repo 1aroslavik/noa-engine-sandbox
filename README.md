@@ -15,12 +15,12 @@ Both options are provided below.
 
 # OPTION 1 — Run with `make` (recommended)
 
-##1 Create Python virtual environment
+## 1 Create Python virtual environment
 ```sh
 make up
 ```
 
-##2 Start CVAE Runtime Texture Server
+## 2 Start CVAE Runtime Texture Server
 ```sh
 make run-textures
 ```
@@ -30,7 +30,7 @@ Server will run here:
 http://localhost:3001/generate
 ```
 
-##3 Start NOA Engine client
+## 3 Start NOA Engine client
 ```sh
 make start
 ```
@@ -48,7 +48,7 @@ Use this if you're on **Windows without make**
 
 ---
 
-#1 Create virtual environment
+# 1 Create virtual environment
 
 ### Windows
 ```powershell
@@ -66,7 +66,7 @@ pip install -r requirements.txt
 
 ---
 
-#2 Start CVAE Texture Server
+# 2 Start CVAE Texture Server
 
 ### Windows
 ```powershell
@@ -87,7 +87,7 @@ http://localhost:3001/generate
 
 ---
 
-#3 Start NOA Engine Client
+# 3 Start NOA Engine Client
 ```sh
 npm install
 npm start
