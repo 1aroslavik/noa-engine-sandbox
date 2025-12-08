@@ -1,6 +1,6 @@
 # Generative Voxel Survival
 
-This project is a procedural voxel prototype built on the **NOA Engine** for the Procedural Content Generation course (UTM).  
+This project is a procedural voxel prototype built on the **NOA Engine** 
 It implements terrain generation, runtime biomes, neural runtime textures, procedural vegetation, and generative animals.
 
 ---
