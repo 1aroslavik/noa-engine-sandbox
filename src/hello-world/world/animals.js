@@ -13,6 +13,9 @@ const noa = (typeof window !== 'undefined' && window.noa) || null
 // список всех животных
 const pigs = []
 const cows = []
+const bears = []
+
+export function getBears() { return bears }
 
 // Экспортируем массивы животных и функции для работы с ними
 export function getPigs() {
@@ -33,6 +36,86 @@ function getHeight(x, z) {
     return Math.max(1, Math.floor((h + 1) * 0.5 * maxHeight))
 }
 
+function buildBearMesh(scene, material, type = "brown", size = "normal") {
+    const scale = size === "small" ? 1.3 : 2.2
+
+    // Базовое тело
+    const body = BABYLON.MeshBuilder.CreateBox("bearBody", { width: 1.2, height: 1.0, depth: 1.6 }, scene)
+    body.position.y = 0.5
+
+    const head = BABYLON.MeshBuilder.CreateBox("bearHead", { width: 0.8, height: 0.7, depth: 0.8 }, scene)
+    head.position.set(0, 0.9, 1.0)
+
+    // -------------------------------------------------------
+    // 👂 УШИ
+    // -------------------------------------------------------
+    const ears = []
+
+    const earSize = 0.32
+    const earOffsetX = 0.35
+    const earOffsetY = 1.25
+    const earOffsetZ = 0.75
+
+    // Левое ухо
+    const earLeft = BABYLON.MeshBuilder.CreateBox("bearEarLeft", {
+        width: earSize,
+        height: earSize,
+        depth: earSize
+    }, scene)
+    earLeft.position.set(-earOffsetX, earOffsetY, earOffsetZ)
+    ears.push(earLeft)
+
+    // Правое ухо
+    const earRight = BABYLON.MeshBuilder.CreateBox("bearEarRight", {
+        width: earSize,
+        height: earSize,
+        depth: earSize
+    }, scene)
+    earRight.position.set(earOffsetX, earOffsetY, earOffsetZ)
+    ears.push(earRight)
+
+    // -------------------------------------------------------
+    // 🐻 ХВОСТ
+    // -------------------------------------------------------
+    const tailSize = 0.28
+    const tail = BABYLON.MeshBuilder.CreateBox("bearTail", {
+        width: tailSize,
+        height: tailSize,
+        depth: tailSize
+    }, scene)
+
+    // Хвост находится сзади тела, чуть ниже его верхней точки
+    tail.position.set(0, 0.75, -0.95)
+
+    // -------------------------------------------------------
+    // Ноги
+    // -------------------------------------------------------
+    const legs = []
+    const legPositions = [
+        [-0.45, -0.4, 0.6], [0.45, -0.4, 0.6],
+        [-0.45, -0.4, -0.6], [0.45, -0.4, -0.6],
+    ]
+
+    for (const [lx, ly, lz] of legPositions) {
+        const leg = BABYLON.MeshBuilder.CreateBox("bearLeg", { width: 0.3, height: 0.6, depth: 0.3 }, scene)
+        leg.position.set(lx, ly, lz)
+        legs.push(leg)
+    }
+
+    // -------------------------------------------------------
+    // Объединяем: тело + голова + ноги + уши + хвост
+    // -------------------------------------------------------
+    const bear = BABYLON.Mesh.MergeMeshes(
+        [body, head, ...legs, ...ears, tail],
+        true,
+        true
+    )
+
+    bear.material = material
+    bear.scaling.set(scale, scale, scale)
+
+    return bear
+}
 
 // ------------------------------------------------------------
 // Создание меша свинки
@@ -66,6 +149,114 @@ function buildPigMesh(scene, material, size = 'normal') {
     return pig
 }
 
+export function createBear(noa, scene, x, z, y = null, type = "brown", size = "normal") {
+    const groundY = y !== null ? y : getHeightAt(x, z)
+
+    const isSmall = size === "small"
+    const width = isSmall ? 0.8 : 1.2
+    const height = isSmall ? 1.2 : 1.8
+    const baseSpeed = isSmall ? 0.22 : 0.18
+    const speedVariation = isSmall ? 0.15 : 0.1
+    const offsetY = height / 2
+
+    const spawnX = Math.floor(x)
+    const spawnZ = Math.floor(z)
+
+    let foundSpot = false
+    let finalX = spawnX
+    let finalZ = spawnZ
+    let finalY = groundY
+
+    for (let dx = -2; dx <= 2 && !foundSpot; dx++) {
+        for (let dz = -2; dz <= 2 && !foundSpot; dz++) {
+            const cx = spawnX + dx
+            const cz = spawnZ + dz
+            const cy = getHeightAt(cx, cz)
+
+            const blockGround = noa.getBlock(cx, cy, cz)
+            const block1 = noa.getBlock(cx, cy + 1, cz)
+            const block2 = noa.getBlock(cx, cy + 2, cz)
+            const block3 = noa.getBlock(cx, cy + 3, cz)
+
+            if (blockGround !== 0 && block1 === 0 && block2 === 0 && block3 === 0) {
+                foundSpot = true
+                finalX = cx
+                finalZ = cz
+                finalY = cy
+            }
+        }
+    }
+
+    if (!foundSpot) {
+        console.log(`🐻 Cannot spawn bear at ${x} ${groundY} ${z}`)
+        return null
+    }
+
+    // МАТЕРИАЛЫ
+    let material = new BABYLON.StandardMaterial("bearMat", scene)
+    if (type === "polar") {
+        material.diffuseColor = new BABYLON.Color3(0.9, 0.9, 1.0)
+    } else {
+        material.diffuseColor = new BABYLON.Color3(0.4, 0.25, 0.15)
+    }
+
+    material.emissiveColor = new BABYLON.Color3(0.1, 0.1, 0.1)
+
+    const mesh = buildBearMesh(scene, material, type, size)
+    const spawnY = finalY + 1 + offsetY
+
+    const id = noa.entities.add([finalX + 0.5, spawnY, finalZ + 0.5])
+
+    noa.entities.addComponent(id, noa.entities.names.physics, {
+        width,
+        height,
+        gravity: true,
+        collideWithTerrain: true,
+        collideWithEntities: false,
+        solid: true,
+        restitution: 0,
+        friction: 0.3,
+    })
+
+    noa.entities.addComponent(id, noa.entities.names.mesh, {
+        mesh,
+        offset: [0, offsetY, 0]
+    })
+
+    const body = noa.entities.getPhysicsBody(id)
+    body.mass = 2.5
+
+    const maxHealth = isSmall ? 10 : 20
+
+    const initialAngle = Math.random() * Math.PI * 2
+    const initialRotation = initialAngle - Math.PI / 2
+
+    bears.push({
+        id,
+        mesh,
+        body,
+        type,
+        angle: initialAngle,
+        targetAngle: initialAngle,
+        currentRotation: initialRotation,
+        speed: baseSpeed + Math.random() * speedVariation,
+        directionChangeTimer: 60 + Math.floor(Math.random() * 60),
+        jumpCooldown: 0,
+        size,
+        health: maxHealth,
+        maxHealth,
+        material,
+        originalEmissive: { r: 0.1, g: 0.1, b: 0.1 },
+        isHighlighted: false,
+        stuckCheckCounter: 0,
+        lastPosition: [finalX + 0.5, spawnY, finalZ + 0.5],
+    })
+
+    mesh.rotation.y = initialRotation
+
+    console.log(`🐻 ${type} bear spawned at ${x} ${spawnY} ${z}`)
+    return id
+}
 
 // ------------------------------------------------------------
 // Создание сущности свинки
@@ -455,7 +646,82 @@ function registerTickHandler() {
                 // Ищем ближайшее животное в направлении взгляда (до 6 блоков)
                 const maxDistance = 6.0
                 let closestDistance = maxDistance
-                
+                for (const bear of bears) {
+    const { id, mesh, body } = bear
+    if (!mesh || !body) continue
+
+    const pos = currentNoa.entities.getPosition(id)
+    if (!pos) continue
+
+    bear.directionChangeTimer--
+    bear.jumpCooldown--
+    bear.stuckCheckCounter++
+
+    const groundX = Math.floor(pos[0])
+    const groundY = Math.floor(pos[1])
+    const groundZ = Math.floor(pos[2])
+    let under = currentNoa.getBlock(groundX, groundY - 1, groundZ)
+
+    if (under === 0) {
+        under =
+            currentNoa.getBlock(groundX - 1, groundY - 1, groundZ) ||
+            currentNoa.getBlock(groundX + 1, groundY - 1, groundZ) ||
+            currentNoa.getBlock(groundX, groundY - 1, groundZ - 1) ||
+            currentNoa.getBlock(groundX, groundY - 1, groundZ + 1) ||
+            0
+    }
+
+    const bearWidth = body.width || 1.2
+    const bearHeight = body.height || 1.8
+    const checkHeight = Math.ceil(bearHeight)
+
+    // СМЕНА НАПРАВЛЕНИЯ как у коров
+    if (bear.directionChangeTimer <= 0) {
+        const currentMovementAngle = bear.angle || (bear.currentRotation + Math.PI / 2)
+        const randomAngle = Math.random() * Math.PI * 2
+        let angleDiff = randomAngle - currentMovementAngle
+
+        while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+        while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+
+        const maxTurn = Math.PI / 2
+        if (angleDiff > maxTurn) angleDiff = maxTurn
+        if (angleDiff < -maxTurn) angleDiff = -maxTurn
+
+        bear.targetAngle = currentMovementAngle + angleDiff
+        while (bear.targetAngle < 0) bear.targetAngle += 2 * Math.PI
+        while (bear.targetAngle >= 2 * Math.PI) bear.targetAngle -= 2 * Math.PI
+
+        bear.directionChangeTimer = 180 + Math.floor(Math.random() * 300)
+    }
+
+    // Поворот головы
+    const targetRotation = bear.targetAngle - Math.PI / 2
+    let angleDiff = targetRotation - bear.currentRotation
+
+    while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+    while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+
+    bear.currentRotation += angleDiff * 0.25
+    mesh.rotation.y = bear.currentRotation
+
+    if (Math.abs(angleDiff) < 0.2) {
+        bear.angle = bear.targetAngle
+    }
+
+    // Движение вперед
+    const moveSpeed = bear.speed * 3.5
+    const isOnGround = under !== 0
+
+    if (isOnGround) {
+        body.velocity[0] = Math.sin(bear.currentRotation) * moveSpeed
+        body.velocity[2] = Math.cos(bear.currentRotation) * moveSpeed
+    } else {
+        body.velocity[0] *= 0.8
+        body.velocity[2] *= 0.8
+    }
+}
+
                 // Проверяем свиней
                 for (const pig of pigs) {
                     const pigPos = currentNoa.entities.getPosition(pig.id)
@@ -1424,7 +1690,32 @@ export function generateAnimalsInChunk(noa, ids, x0, y0, z0) {
                 }
             }
         }
-        
+        // ================================
+// 🐻 СПАВН МЕДВЕДЕЙ ПО БИОМАМ
+// ================================
+
+// ❄ Белые медведи — только холодные биомы
+if (biome === "snow" || biome === "tundra" || biome === "ice") {
+    if (Math.random() < 0.25) { // 25% шанс
+        const size = Math.random() < 0.3 ? 'small' : 'normal'
+        const result = createBear(noa, scene, x, z, y, "polar", size)
+        if (result) {
+            spawnedPositions.push([x, z])
+        }
+    }
+}
+
+// 🟫 Коричневые медведи — лес, тайга, горы
+if (biome === "forest" || biome === "dry" || biome === "mountain") {
+    if (Math.random() < 0.35) { // 35% шанс
+        const size = Math.random() < 0.4 ? 'small' : 'normal'
+        const result = createBear(noa, scene, x, z, y, "brown", size)
+        if (result) {
+            spawnedPositions.push([x, z])
+        }
+    }
+}
+
         // Спавним коров в тех же биомах, что и свиньи
         if (biome === "plains" || biome === "forest" || biome === "dry") {
             if (Math.random() < 0.3) { // 30% шанс спавна коровы (уменьшил с 50%)
