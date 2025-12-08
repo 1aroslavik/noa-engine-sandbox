@@ -29,80 +29,80 @@ const baseRecipes = [
       ["dirt", "log"],
       [null, null]
     ],
-    result: { name: "dark_log", count: 1 },
+    result: { name: "wood", count: 1 },
     difficulty: CRAFT_DIFFICULTY.NORMAL,
-    description: "Смешивание земли с деревом - темное дерево",
-    textureMix: { texture1: "log_side", texture2: "dirt", ratio: 0.3, resultName: "dark_log_side" }
+    description: "Смешивание земли с деревом - дерево",
+    textureMix: { texture1: "log_side", texture2: "dirt", ratio: 0.3, resultName: "wood_side" }
   },
   {
     pattern: [
       ["log", "dirt"],
       [null, null]
     ],
-    result: { name: "dark_log", count: 1 },
+    result: { name: "wood", count: 1 },
     difficulty: CRAFT_DIFFICULTY.NORMAL,
-    description: "Смешивание дерева с землей - темное дерево",
-    textureMix: { texture1: "log_side", texture2: "dirt", ratio: 0.3, resultName: "dark_log_side" }
+    description: "Смешивание дерева с землей - дерево",
+    textureMix: { texture1: "log_side", texture2: "dirt", ratio: 0.3, resultName: "wood_side" }
   },
   {
     pattern: [
       ["stone", "log"],
       [null, null]
     ],
-    result: { name: "stone_log", count: 1 },
+    result: { name: "brick", count: 1 },
     difficulty: CRAFT_DIFFICULTY.NORMAL,
-    description: "Смешивание камня с деревом - каменное дерево",
-    textureMix: { texture1: "log_side", texture2: "stone", ratio: 0.4, resultName: "stone_log_side" }
+    description: "Смешивание камня с деревом - кирпич",
+    textureMix: { texture1: "log_side", texture2: "stone", ratio: 0.4, resultName: "brick_side" }
   },
   {
     pattern: [
       ["log", "stone"],
       [null, null]
     ],
-    result: { name: "stone_log", count: 1 },
+    result: { name: "brick", count: 1 },
     difficulty: CRAFT_DIFFICULTY.NORMAL,
-    description: "Смешивание дерева с камнем - каменное дерево",
-    textureMix: { texture1: "log_side", texture2: "stone", ratio: 0.4, resultName: "stone_log_side" }
+    description: "Смешивание дерева с камнем - кирпич",
+    textureMix: { texture1: "log_side", texture2: "stone", ratio: 0.4, resultName: "brick_side" }
   },
   {
     pattern: [
       ["dirt", "stone"],
       [null, null]
     ],
-    result: { name: "mud_stone", count: 1 },
+    result: { name: "coal", count: 1 },
     difficulty: CRAFT_DIFFICULTY.NORMAL,
-    description: "Смешивание земли с камнем - грязный камень",
-    textureMix: { texture1: "stone", texture2: "dirt", ratio: 0.35, resultName: "mud_stone" }
+    description: "Смешивание земли с камнем - уголь",
+    textureMix: { texture1: "stone", texture2: "dirt", ratio: 0.35, resultName: "coal" }
   },
   {
     pattern: [
       ["stone", "dirt"],
       [null, null]
     ],
-    result: { name: "mud_stone", count: 1 },
+    result: { name: "coal", count: 1 },
     difficulty: CRAFT_DIFFICULTY.NORMAL,
-    description: "Смешивание камня с землей - грязный камень",
-    textureMix: { texture1: "stone", texture2: "dirt", ratio: 0.35, resultName: "mud_stone" }
+    description: "Смешивание камня с землей - уголь",
+    textureMix: { texture1: "stone", texture2: "dirt", ratio: 0.35, resultName: "coal" }
   },
   {
     pattern: [
       ["sand", "log"],
       [null, null]
     ],
-    result: { name: "sandy_log", count: 1 },
+    result: { name: "glass", count: 1 },
     difficulty: CRAFT_DIFFICULTY.NORMAL,
-    description: "Смешивание песка с деревом - песчаное дерево",
-    textureMix: { texture1: "log_side", texture2: "sand", ratio: 0.3, resultName: "sandy_log_side" }
+    description: "Смешивание песка с деревом - стекло",
+    useIceTexture: true // Используем текстуру ice вместо генерации
   },
   {
     pattern: [
       ["log", "sand"],
       [null, null]
     ],
-    result: { name: "sandy_log", count: 1 },
+    result: { name: "glass", count: 1 },
     difficulty: CRAFT_DIFFICULTY.NORMAL,
-    description: "Смешивание дерева с песком - песчаное дерево",
-    textureMix: { texture1: "log_side", texture2: "sand", ratio: 0.3, resultName: "sandy_log_side" }
+    description: "Смешивание дерева с песком - стекло",
+    useIceTexture: true // Используем текстуру ice вместо генерации
   }
   // Инструменты временно отключены
 ]
@@ -113,6 +113,7 @@ let generatedRecipes = []
 export let recipes = [...baseRecipes, ...generatedRecipes]
 
 // === ГЕНЕРАЦИЯ РЕЦЕПТОВ НА ОСНОВЕ ИНВЕНТАРЯ ===
+// Отключена - используем только базовые рецепты
 function generateRecipes() {
   generatedRecipes = []
   
@@ -144,6 +145,7 @@ function generateRecipes() {
     if (itemCounts.get(itemName) >= 2 && generated.size < targetRecipeCount) {
       const itemDef = getItemDefinition(itemName)
       const nextRarity = getNextRarity(itemDef.rarity)
+      // Используем нормальное название вместо синтетического
       const resultName = generateResultName(itemName, itemDef.type, nextRarity)
       
       if (!generated.has(`${itemName}+${itemName}`)) {
@@ -197,8 +199,9 @@ function generateRecipes() {
       
       if (def1.rarity === def2.rarity && def1.type === def2.type && 
           itemCounts.get(item1) >= 1 && itemCounts.get(item2) >= 1) {
+        // Используем нормальное название вместо синтетического
+        const resultName = generateResultName(`${item1}_${item2}`, def1.type, def1.rarity)
         const nextRarity = getNextRarity(def1.rarity)
-        const resultName = generateResultName(`${item1}_${item2}`, def1.type, nextRarity)
         
         if (!generated.has(`${item1}+${item2}`) && !generated.has(`${item2}+${item1}`)) {
           generatedRecipes.push({
@@ -216,7 +219,7 @@ function generateRecipes() {
     }
   }
   
-  // Правило 3: 2 разных предмета разных типов = синтетический предмет
+  // Правило 3: 2 разных предмета разных типов = смешанный предмет
   for (let i = 0; i < availableItems.length && generated.size < targetRecipeCount; i++) {
     for (let j = i + 1; j < availableItems.length && generated.size < targetRecipeCount; j++) {
       const item1 = availableItems[i]
@@ -224,9 +227,16 @@ function generateRecipes() {
       const def1 = getItemDefinition(item1)
       const def2 = getItemDefinition(item2)
       
+      // Пропускаем комбинации, которые уже есть в базовых рецептах
+      const comboKey = [item1, item2].sort().join('+')
+      if (baseRecipePatterns.has(comboKey)) {
+        continue
+      }
+      
       if (def1.type !== def2.type && 
           def1.rarity === def2.rarity &&
           itemCounts.get(item1) >= 1 && itemCounts.get(item2) >= 1) {
+        // Используем нормальное название
         const resultName = generateResultName(`${item1}_${item2}`, MATERIAL_TYPE.SYNTHETIC, def1.rarity)
         
         if (!generated.has(`${item1}+${item2}_synth`) && !generated.has(`${item2}+${item1}_synth`)) {
@@ -237,7 +247,7 @@ function generateRecipes() {
             ],
             result: { name: resultName, count: 1 },
             difficulty: getDifficultyFromRarity(def1.rarity) + 1,
-            description: `Синтез ${def1.description} и ${def2.description}`
+            description: `Смешивание ${def1.description} и ${def2.description}`
           })
           generated.add(`${item1}+${item2}_synth`)
         }
@@ -259,6 +269,7 @@ function generateRecipes() {
         if (def1.rarity === def2.rarity && def2.rarity === def3.rarity &&
             itemCounts.get(item1) >= 1 && itemCounts.get(item2) >= 1 && itemCounts.get(item3) >= 1) {
           const nextRarity = getNextRarity(def1.rarity)
+          // Используем нормальное название
           const resultName = generateResultName(`${item1}_${item2}_${item3}`, def1.type, nextRarity)
           const key = `${item1}+${item2}+${item3}`
           
@@ -282,6 +293,9 @@ function generateRecipes() {
   // Обновляем общий список рецептов
   recipes = [...baseRecipes, ...generatedRecipes]
   console.log(`🔨 Сгенерировано ${generatedRecipes.length} рецептов из ${availableItems.length} доступных предметов`)
+  
+  // Обновляем список рецептов в UI
+  updateRecipesList()
 }
 
 // Получить следующую редкость
@@ -306,29 +320,72 @@ function getDifficultyFromRarity(rarity) {
   return rarityToDifficulty[rarity] || CRAFT_DIFFICULTY.NORMAL
 }
 
+// Маппинг известных комбинаций на нормальные названия блоков
+const knownCombinations = {
+  'log_dirt': 'wood',
+  'dirt_log': 'wood',
+  'log_stone': 'brick',
+  'stone_log': 'brick',
+  'dirt_stone': 'coal',
+  'stone_dirt': 'coal',
+  'log_sand': 'glass',
+  'sand_log': 'glass',
+  // Дополнительные комбинации
+  'dirt_planks': 'dirty_planks',
+  'planks_dirt': 'dirty_planks',
+  'stone_planks': 'stone_planks',
+  'planks_stone': 'stone_planks',
+  'sand_planks': 'sandy_planks',
+  'planks_sand': 'sandy_planks'
+}
+
 // Генерировать имя результата на основе входных данных
 function generateResultName(baseName, type, rarity) {
-  // Создаем уникальное имя на основе типа и редкости
-  const typePrefix = type === MATERIAL_TYPE.ORGANIC ? 'org' : 
-                     type === MATERIAL_TYPE.MINERAL ? 'min' : 'syn'
-  const raritySuffix = rarity === RARITY.COMMON ? 'common' :
-                       rarity === RARITY.UNCOMMON ? 'uncommon' :
-                       rarity === RARITY.RARE ? 'rare' :
-                       rarity === RARITY.EPIC ? 'epic' : 'legendary'
-  
-  // Упрощаем базовое имя (берем первую часть до _ или первые 8 символов)
-  let base = baseName.split('_')[0] || baseName
-  if (base.length > 8) {
-    base = base.substring(0, 8)
-  }
-  
-  // Если baseName содержит несколько частей через _, берем первые две
+  // Нормализуем базовое имя (сортируем части для унификации)
   const parts = baseName.split('_')
-  if (parts.length > 1 && parts.length <= 3) {
-    base = parts.slice(0, 2).join('_')
+  const sortedParts = [...parts].sort()
+  const normalizedBase = sortedParts.join('_')
+  
+  // Проверяем, есть ли известная комбинация
+  for (const [key, value] of Object.entries(knownCombinations)) {
+    const sortedKey = key.split('_').sort().join('_')
+    if (normalizedBase === sortedKey) {
+      console.log(`✅ Используем известное название: ${baseName} -> ${value}`)
+      return value
+    }
   }
   
-  return `${typePrefix}_${base}_${raritySuffix}`
+  // Если это известная комбинация из двух частей, создаем простое название
+  if (parts.length === 2) {
+    const [part1, part2] = parts
+    const sorted = [part1, part2].sort()
+    
+    // Создаем простое название без префиксов syn/org/min
+    // Например: log_dirt -> dark_log, stone_dirt -> mud_stone
+    const simpleName = `${sorted[1]}_${sorted[0]}` // Обратный порядок для читаемости
+    
+    // Если это не известная комбинация, создаем улучшенную версию первого предмета
+    if (type === MATERIAL_TYPE.ORGANIC && part1 === 'log') {
+      return `enhanced_${part1}` // enhanced_log
+    } else if (type === MATERIAL_TYPE.MINERAL) {
+      return `mixed_${part1}` // mixed_stone, mixed_dirt
+    }
+    
+    return simpleName
+  }
+  
+  // Для одиночных предметов создаем улучшенную версию
+  if (parts.length === 1) {
+    const raritySuffix = rarity === RARITY.UNCOMMON ? 'refined' :
+                         rarity === RARITY.RARE ? 'enhanced' :
+                         rarity === RARITY.EPIC ? 'superior' :
+                         rarity === RARITY.LEGENDARY ? 'legendary' : 'improved'
+    return `${raritySuffix}_${baseName}`
+  }
+  
+  // Для сложных комбинаций создаем простое название
+  const mainPart = parts[0] // Берем первую часть
+  return `mixed_${mainPart}`
 }
 
 
@@ -564,10 +621,175 @@ resultSlot.style.textOverflow = "ellipsis"
 resultSlot.style.whiteSpace = "nowrap"
 craftDiv.appendChild(resultSlot)
 
+// === СПИСОК РЕЦЕПТОВ ===
+export const recipesListDiv = document.createElement("div")
+recipesListDiv.style.width = "100%"
+recipesListDiv.style.maxHeight = "200px"
+recipesListDiv.style.overflowY = "auto"
+recipesListDiv.style.overflowX = "hidden"
+recipesListDiv.style.background = "#1a1a1a"
+recipesListDiv.style.border = "1px solid #444"
+recipesListDiv.style.padding = "8px"
+recipesListDiv.style.marginTop = "8px"
+recipesListDiv.style.color = "#ccc"
+recipesListDiv.style.fontSize = "11px"
+recipesListDiv.style.fontFamily = "monospace"
+recipesListDiv.style.lineHeight = "1.4"
+craftDiv.appendChild(recipesListDiv)
+
+// Функция для форматирования рецепта в текст
+function formatRecipeText(recipe) {
+  const items = []
+  for (let y = 0; y < 2; y++) {
+    for (let x = 0; x < 2; x++) {
+      if (recipe.pattern[y][x]) {
+        items.push(recipe.pattern[y][x])
+      }
+    }
+  }
+  
+  // Сортируем предметы для унификации (чтобы dirt + log и log + dirt выглядели одинаково)
+  const sortedItems = [...items].sort()
+  
+  // Убираем дубликаты и считаем количество каждого
+  const itemCounts = new Map()
+  sortedItems.forEach(item => {
+    itemCounts.set(item, (itemCounts.get(item) || 0) + 1)
+  })
+  
+  // Формируем текст с учетом количества
+  const itemsText = Array.from(itemCounts.entries())
+    .map(([item, count]) => count > 1 ? `${item} x${count}` : item)
+    .join(' + ')
+  
+  const resultName = recipe.result.name
+  const resultCount = recipe.result.count || 1
+  const resultText = resultCount > 1 ? `${resultName} x${resultCount}` : resultName
+  
+  return `${itemsText} → ${resultText}`
+}
+
+// Функция для получения уникального ключа рецепта (для группировки)
+function getRecipeKey(recipe) {
+  const items = []
+  for (let y = 0; y < 2; y++) {
+    for (let x = 0; x < 2; x++) {
+      if (recipe.pattern[y][x]) {
+        items.push(recipe.pattern[y][x])
+      }
+    }
+  }
+  
+  // Сортируем и создаем ключ
+  const sortedItems = [...items].sort().join('+')
+  const resultName = recipe.result.name
+  return `${sortedItems}→${resultName}`
+}
+
+// Фunction to update recipes list
+export function updateRecipesList() {
+  // Clear the list
+  recipesListDiv.innerHTML = ''
+  
+  // Title
+  const title = document.createElement("div")
+  title.textContent = "📋 Available Recipes:"
+  title.style.fontWeight = "bold"
+  title.style.marginBottom = "6px"
+  title.style.color = "#fff"
+  title.style.borderBottom = "1px solid #444"
+  title.style.paddingBottom = "4px"
+  recipesListDiv.appendChild(title)
+  
+  // Base recipes - группируем одинаковые рецепты
+  if (baseRecipes.length > 0) {
+    const baseTitle = document.createElement("div")
+    baseTitle.textContent = "Base:"
+    baseTitle.style.fontWeight = "bold"
+    baseTitle.style.marginTop = "6px"
+    baseTitle.style.marginBottom = "4px"
+    baseTitle.style.color = "#aaffaa"
+    recipesListDiv.appendChild(baseTitle)
+    
+    // Группируем рецепты по ключу (игнорируя порядок предметов)
+    const recipeMap = new Map()
+    baseRecipes.forEach((recipe) => {
+      const key = getRecipeKey(recipe)
+      if (!recipeMap.has(key)) {
+        recipeMap.set(key, recipe)
+      }
+    })
+    
+    // Отображаем уникальные рецепты
+    Array.from(recipeMap.values()).forEach((recipe) => {
+      const recipeItem = document.createElement("div")
+      recipeItem.textContent = `  ${formatRecipeText(recipe)}`
+      recipeItem.style.marginBottom = "2px"
+      recipeItem.style.paddingLeft = "4px"
+      
+      // Highlight recipes with textureMix
+      if (recipe.textureMix) {
+        recipeItem.style.color = "#ffaa44"
+        recipeItem.textContent = `  ${recipeItem.textContent} 🎨`
+      }
+      
+      recipesListDiv.appendChild(recipeItem)
+    })
+  }
+  
+  // Dynamic recipes - отключены
+  // if (generatedRecipes.length > 0) { ... }
+  
+  // If no recipes
+  if (baseRecipes.length === 0) {
+    const noRecipes = document.createElement("div")
+    noRecipes.textContent = "  No available recipes"
+    noRecipes.style.color = "#666"
+    noRecipes.style.fontStyle = "italic"
+    recipesListDiv.appendChild(noRecipes)
+  }
+}
+
 
 
 // === ПОЛУЧЕНИЕ ПАТТЕРНА ИЗ 2x2 ===
+// Нормализация названий предметов для рецептов
+// dirt_plains, dirt_tundra, dirt_desert, dirt_mountain -> dirt
+function normalizeItemNameForRecipe(itemName) {
+  if (!itemName) return null
+  
+  // Нормализуем варианты dirt
+  if (itemName.startsWith('dirt_')) {
+    return 'dirt'
+  }
+  
+  // Нормализуем варианты stone (если есть stone_*)
+  if (itemName.startsWith('stone_')) {
+    return 'stone'
+  }
+  
+  // Нормализуем варианты sand (если есть sand_*)
+  if (itemName.startsWith('sand_')) {
+    return 'sand'
+  }
+  
+  // Нормализуем варианты log (если есть log_*)
+  if (itemName.startsWith('log_')) {
+    return 'log'
+  }
+  
+  // Для остальных возвращаем как есть
+  return itemName
+}
+
 function getGridPattern() {
+  const gridCells = [
+    grid[0], // [0,0]
+    grid[1], // [0,1]
+    grid[2], // [1,0]
+    grid[3]  // [1,1]
+  ]
+  
   // Функция для нормализации значения из dataset
   const normalizeItem = (cell) => {
     // Проверяем наличие свойства item в dataset
@@ -581,19 +803,27 @@ function getGridPattern() {
     return item
   }
   
+  // Получаем сырые значения
+  const rawPattern = [
+    [normalizeItem(gridCells[0]), normalizeItem(gridCells[1])],
+    [normalizeItem(gridCells[2]), normalizeItem(gridCells[3])]
+  ]
+  
+  // Нормализуем названия для рецептов (dirt_tundra -> dirt и т.д.)
   const pattern = [
-    [normalizeItem(grid[0]), normalizeItem(grid[1])],
-    [normalizeItem(grid[2]), normalizeItem(grid[3])]
+    [normalizeItemNameForRecipe(rawPattern[0][0]), normalizeItemNameForRecipe(rawPattern[0][1])],
+    [normalizeItemNameForRecipe(rawPattern[1][0]), normalizeItemNameForRecipe(rawPattern[1][1])]
   ]
   
   // Отладочный вывод для диагностики
   console.log('📋 getGridPattern вызван. Ячейки:', {
-    0: grid[0].dataset.item || 'undefined',
-    1: grid[1].dataset.item || 'undefined',
-    2: grid[2].dataset.item || 'undefined',
-    3: grid[3].dataset.item || 'undefined'
+    0: gridCells[0].dataset.item || 'undefined',
+    1: gridCells[1].dataset.item || 'undefined',
+    2: gridCells[2].dataset.item || 'undefined',
+    3: gridCells[3].dataset.item || 'undefined'
   })
-  console.log('📋 Нормализованный паттерн:', pattern)
+  console.log('📋 Сырой паттерн:', rawPattern)
+  console.log('📋 Нормализованный паттерн для рецептов:', pattern)
   
   return pattern
 }
@@ -784,8 +1014,21 @@ resultSlot.onclick = async () => {
     
     console.log('🔨 Крафт предмета:', name, 'x', count)
 
+    // Если рецепт использует текстуру ice (для glass)
+    if (recipe && recipe.useIceTexture && name === 'glass') {
+      console.log('🔷 Используем текстуру ice для glass')
+      // Отправляем событие для регистрации блока glass с текстурой ice
+      window.dispatchEvent(new CustomEvent('textureGenerated', {
+        detail: { 
+          textureName: 'glass', 
+          textureData: null, // null означает использовать ice
+          useIceTexture: true 
+        }
+      }))
+    }
     // Если рецепт требует смешивания текстур, генерируем текстуру
-    if (recipe && recipe.textureMix) {
+    // Только для базовых рецептов с явным textureMix
+    else if (recipe && recipe.textureMix) {
       console.log('🎨 Генерация смешанной текстуры для:', name)
       try {
         const { mixTextures } = await import('../texture_runtime_loader.js')
@@ -828,12 +1071,12 @@ resultSlot.onclick = async () => {
           window.dispatchEvent(new CustomEvent('textureGenerated', {
             detail: { textureName: topName, textureData: topTexture }
           }))
+        } else {
+          // Если нет _side, значит это простой блок - генерируем только одну текстуру
+          console.log('✅ Смешанная текстура сгенерирована (простой блок):', resultName)
         }
         
-        console.log('✅ Смешанная текстура сгенерирована:', resultName)
-        
-        // Отправляем событие для обновления материалов (side текстура) ПОСЛЕДНЕЙ
-        // Это важно, потому что блок регистрируется когда приходит последняя текстура
+        // Отправляем событие для обновления материалов (side текстура или основная)
         window.dispatchEvent(new CustomEvent('textureGenerated', {
           detail: { textureName: resultName, textureData: mixedTexture }
         }))
@@ -902,6 +1145,8 @@ document.addEventListener("keydown", e => {
       console.log("✅ Окно крафта открыто")
       // Генерируем рецепты на основе текущего инвентаря
       generateRecipes()
+      // Обновляем список рецептов
+      updateRecipesList()
       // Обновляем крафт при открытии
       updateCrafting()
       // Отключаем pointer lock, чтобы курсор был виден для перетаскивания

@@ -751,92 +751,71 @@ function setupInteraction(placeBlockID, blocksMap, waterID) {
         'granite': blocksMap['granite'] || null,
         
         // Смешанные блоки (из крафтинга)
-        'dark_log': blocksMap['dark_log'] || null,
-        'stone_log': blocksMap['stone_log'] || null,
-        'mud_stone': blocksMap['mud_stone'] || null,
-        'sandy_log': blocksMap['sandy_log'] || null,
+        'wood': blocksMap['wood'] || null,
+        'brick': blocksMap['brick'] || null,
+        'coal': blocksMap['coal'] || null,
+        'glass': blocksMap['glass'] || null,
+        'dirty_planks': blocksMap['dirty_planks'] || null,
+        'stone_planks': blocksMap['stone_planks'] || null,
+        'sandy_planks': blocksMap['sandy_planks'] || null,
+        'enhanced_log': blocksMap['enhanced_log'] || blocksMap['log'] || null,
+        'mixed_stone': blocksMap['mixed_stone'] || blocksMap['stone'] || null,
+        'mixed_dirt': blocksMap['mixed_dirt'] || blocksMap['dirt'] || null,
+        'improved_log': blocksMap['improved_log'] || blocksMap['log'] || null,
+        'refined_log': blocksMap['refined_log'] || blocksMap['log'] || null,
+        'enhanced_stone': blocksMap['enhanced_stone'] || blocksMap['stone'] || null,
+        'enhanced_dirt': blocksMap['enhanced_dirt'] || blocksMap['dirt'] || null,
     }
     
     // Функция для получения имени блока из имени предмета
     function getBlockNameFromItemName(itemName) {
         console.log(`🔍 Преобразование имени предмета в блок: ${itemName}`)
         
-        // Если предмет начинается с org_, min_, syn_, пытаемся извлечь базовое имя
+        // Теперь предметы не имеют префиксов syn_/org_/min_, но оставляем проверку для обратной совместимости
         if (itemName.startsWith('org_') || itemName.startsWith('min_') || itemName.startsWith('syn_')) {
+            // Старый формат - извлекаем базовое имя
             const parts = itemName.split('_')
             if (parts.length >= 3) {
-                // Извлекаем базовое имя (пропускаем префикс типа и суффикс редкости)
-                const baseParts = parts.slice(1, -1) // Убираем первый (тип) и последний (редкость)
+                const baseParts = parts.slice(1, -1)
                 const baseName = baseParts.join('_')
-                
-                console.log(`🔍 Извлечено базовое имя: ${baseName} из ${itemName}`)
-                
-                // Проверяем известные маппинги для смешанных блоков
-                const mixedBlockMapping = {
-                    'log_dirt': 'dark_log',
-                    'dirt_log': 'dark_log',
-                    'log_stone': 'stone_log',
-                    'stone_log': 'stone_log',
-                    'dirt_stone': 'mud_stone',
-                    'stone_dirt': 'mud_stone',
-                    'log_sand': 'sandy_log',
-                    'sand_log': 'sandy_log',
-                    // Дополнительные варианты для разных порядков
-                    'dirt_plains': 'dirt',
-                    'plains_dirt': 'dirt',
-                    'dirt_tundra': 'dirt',
-                    'tundra_dirt': 'dirt',
-                    'dirt_desert': 'dirt',
-                    'desert_dirt': 'dirt',
-                    'dirt_mountain': 'dirt',
-                    'mountain_dirt': 'dirt'
-                }
-                
-                // Проверяем маппинг (с учетом разных порядков - сортируем части)
-                const sortedBaseName = baseName.split('_').sort().join('_')
-                console.log(`🔍 Отсортированное базовое имя: ${sortedBaseName}`)
-                
-                for (const [key, value] of Object.entries(mixedBlockMapping)) {
-                    const sortedKey = key.split('_').sort().join('_')
-                    if (sortedBaseName === sortedKey) {
-                        console.log(`✅ Маппинг найден: ${baseName} (${sortedBaseName}) -> ${value}`)
-                        return value
-                    }
-                }
-                
-                // Прямая проверка
-                if (mixedBlockMapping[baseName]) {
-                    console.log(`✅ Маппинг найден (прямой): ${baseName} -> ${mixedBlockMapping[baseName]}`)
-                    return mixedBlockMapping[baseName]
-                }
-                
-                // Если базовое имя содержит известные блоки (dirt, stone, log, sand и т.д.)
-                // Проверяем, есть ли такой блок в blocksMap
-                // @ts-ignore
-                const globalBlocksMap = window.blocksMap
-                if (globalBlocksMap && globalBlocksMap[baseName]) {
-                    console.log(`✅ Блок найден по базовому имени: ${baseName}`)
-                    return baseName
-                }
-                
-                // Если базовое имя содержит подстроку известного блока, используем его
-                // Например: dirt_plains -> dirt, stone_mountain -> stone
-                const knownBlocks = ['dirt', 'stone', 'log', 'sand', 'gravel', 'andesite', 'granite', 'grass']
-                for (const knownBlock of knownBlocks) {
-                    if (baseName.includes(knownBlock) && globalBlocksMap && globalBlocksMap[knownBlock]) {
-                        console.log(`✅ Маппинг ${baseName} -> ${knownBlock} (по подстроке)`)
-                        return knownBlock
-                    }
-                }
-                
-                // Если не нашли в маппинге, возвращаем базовое имя
-                console.log(`⚠ Маппинг не найден для ${baseName}, возвращаем базовое имя`)
-                return baseName
+                return getBlockNameFromItemName(baseName) // Рекурсивно обрабатываем
             }
         }
         
-        // Если не сгенерированный предмет, возвращаем как есть
-        console.log(`ℹ️ Предмет ${itemName} не сгенерированный, возвращаем как есть`)
+        // Проверяем известные маппинги для смешанных блоков
+        const mixedBlockMapping = {
+            'wood': 'wood',
+            'brick': 'brick',
+            'coal': 'coal',
+            'glass': 'glass',
+            'dirty_planks': 'dirty_planks',
+            'stone_planks': 'stone_planks',
+            'sandy_planks': 'sandy_planks',
+            'enhanced_log': 'log', // enhanced_log -> log (но с другой текстурой)
+            'mixed_stone': 'stone',
+            'mixed_dirt': 'dirt',
+            'improved_log': 'log',
+            'refined_log': 'log',
+            'enhanced_stone': 'stone',
+            'enhanced_dirt': 'dirt'
+        }
+        
+        // Прямая проверка маппинга
+        if (mixedBlockMapping[itemName]) {
+            console.log(`✅ Маппинг найден: ${itemName} -> ${mixedBlockMapping[itemName]}`)
+            return mixedBlockMapping[itemName]
+        }
+        
+        // Если имя предмета совпадает с именем блока, возвращаем как есть
+        // @ts-ignore
+        const globalBlocksMap = window.blocksMap
+        if (globalBlocksMap && globalBlocksMap[itemName]) {
+            console.log(`✅ Блок найден по имени предмета: ${itemName}`)
+            return itemName
+        }
+        
+        // Если не нашли, возвращаем как есть (может быть новый блок)
+        console.log(`ℹ️ Блок для предмета ${itemName} не найден в маппинге, возвращаем как есть`)
         return itemName
     }
     

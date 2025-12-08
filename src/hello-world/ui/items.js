@@ -247,33 +247,77 @@ export const ITEM_DEFINITIONS = {
   },
   
   // === СМЕШАННЫЕ БЛОКИ (из крафтинга) ===
-  'dark_log': {
-    name: 'dark_log',
+  'wood': {
+    name: 'wood',
     rarity: RARITY.UNCOMMON,
     type: MATERIAL_TYPE.ORGANIC,
     craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
-    description: 'Темное дерево (смешано с землей)'
+    description: 'Wood (mixed with dirt)'
   },
-  'stone_log': {
-    name: 'stone_log',
+  'brick': {
+    name: 'brick',
     rarity: RARITY.UNCOMMON,
     type: MATERIAL_TYPE.SYNTHETIC,
     craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
-    description: 'Каменное дерево (смешано с камнем)'
+    description: 'Brick (mixed with stone)'
   },
-  'mud_stone': {
-    name: 'mud_stone',
+  'coal': {
+    name: 'coal',
     rarity: RARITY.UNCOMMON,
     type: MATERIAL_TYPE.MINERAL,
     craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
-    description: 'Грязный камень (смешан с землей)'
+    description: 'Coal (mixed with dirt and stone)'
   },
-  'sandy_log': {
-    name: 'sandy_log',
+  'glass': {
+    name: 'glass',
     rarity: RARITY.UNCOMMON,
     type: MATERIAL_TYPE.ORGANIC,
     craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
-    description: 'Песчаное дерево (смешано с песком)'
+    description: 'Glass (mixed with sand)'
+  },
+  
+  // === ДОПОЛНИТЕЛЬНЫЕ СМЕШАННЫЕ БЛОКИ ===
+  'dirty_planks': {
+    name: 'dirty_planks',
+    rarity: RARITY.UNCOMMON,
+    type: MATERIAL_TYPE.ORGANIC,
+    craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: 'Грязные доски (смешано с землей)'
+  },
+  'stone_planks': {
+    name: 'stone_planks',
+    rarity: RARITY.UNCOMMON,
+    type: MATERIAL_TYPE.SYNTHETIC,
+    craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: 'Каменные доски (смешано с камнем)'
+  },
+  'sandy_planks': {
+    name: 'sandy_planks',
+    rarity: RARITY.UNCOMMON,
+    type: MATERIAL_TYPE.ORGANIC,
+    craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: 'Песчаные доски (смешано с песком)'
+  },
+  'enhanced_log': {
+    name: 'enhanced_log',
+    rarity: RARITY.UNCOMMON,
+    type: MATERIAL_TYPE.ORGANIC,
+    craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: 'Улучшенное дерево'
+  },
+  'mixed_stone': {
+    name: 'mixed_stone',
+    rarity: RARITY.UNCOMMON,
+    type: MATERIAL_TYPE.MINERAL,
+    craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: 'Смешанный камень'
+  },
+  'mixed_dirt': {
+    name: 'mixed_dirt',
+    rarity: RARITY.UNCOMMON,
+    type: MATERIAL_TYPE.MINERAL,
+    craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: 'Смешанная земля'
   },
   'andesite': {
     name: 'andesite',
@@ -323,7 +367,11 @@ export function getItemDefinition(itemName) {
   }
   
   // Если предмет сгенерирован (начинается с org_, min_, syn_), парсим его
+  // НО: теперь мы не используем эти префиксы, так что эта проверка не нужна
+  // Оставляем для обратной совместимости, но она не должна срабатывать
   if (itemName.startsWith('org_') || itemName.startsWith('min_') || itemName.startsWith('syn_')) {
+    console.warn(`⚠ Обнаружен старый формат названия: ${itemName}. Это не должно происходить.`)
+    // Парсим для обратной совместимости, но лучше не использовать
     const parts = itemName.split('_')
     if (parts.length >= 3) {
       const type = parts[0] === 'org' ? MATERIAL_TYPE.ORGANIC :
@@ -415,18 +463,14 @@ export function getRarityName(rarity) {
 
 // Сократить название предмета для отображения в UI
 export function getShortName(itemName) {
-  // Если это сгенерированный предмет (org_, min_, syn_), создаем короткое имя
+  // Старый формат с префиксами больше не используется, но оставляем для обратной совместимости
   if (itemName.startsWith('org_') || itemName.startsWith('min_') || itemName.startsWith('syn_')) {
+    // Извлекаем базовое имя без префиксов
     const parts = itemName.split('_')
     if (parts.length >= 3) {
-      const typePrefix = parts[0] === 'org' ? 'Org' : parts[0] === 'min' ? 'Min' : 'Syn'
       const base = parts.slice(1, -1).join('_')
-      const rarity = parts[parts.length - 1]
-      const rarityShort = rarity === 'common' ? 'C' :
-                         rarity === 'uncommon' ? 'U' :
-                         rarity === 'rare' ? 'R' :
-                         rarity === 'epic' ? 'E' : 'L'
-      return `${typePrefix}_${base.substring(0, 4)}_${rarityShort}`
+      // Используем базовое имя напрямую
+      return base.length > 6 ? base.substring(0, 6) : base
     }
   }
   
@@ -477,10 +521,20 @@ export function getShortName(itemName) {
     'biome_block_mountain': 'BiomeM',
     'biome_block_hybrid': 'BiomeH',
     // Смешанные блоки
-    'dark_log': 'DarkLog',
-    'stone_log': 'StnLog',
-    'mud_stone': 'MudStn',
-    'sandy_log': 'SndLog'
+    'wood': 'Wood',
+    'brick': 'Brick',
+    'coal': 'Coal',
+    'glass': 'Glass',
+    'dirty_planks': 'DrtPlk',
+    'stone_planks': 'StnPlk',
+    'sandy_planks': 'SndPlk',
+    'enhanced_log': 'EnhLog',
+    'mixed_stone': 'MixStn',
+    'mixed_dirt': 'MixDrt',
+    'improved_log': 'ImpLog',
+    'refined_log': 'RefLog',
+    'enhanced_stone': 'EnhStn',
+    'enhanced_dirt': 'EnhDrt'
   }
   
   // Если есть короткое название, используем его
