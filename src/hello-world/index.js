@@ -6,10 +6,11 @@ import { getBiome } from "./biome.js"
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder"
 import { setWaterID } from "./world/water.js"
 import { updateWater } from "./world/water.js"
-import { getPigs, damagePig, getCows, damageCow } from "./world/animals.js"
+import { getPigs, damagePig, getCows, damageCow, getBears, damageBear } from "./world/animals.js"
 import "./ui/inventory.js" // Подключаем инвентарь и крафтинг
 import { addItem } from "./ui/inventory.js"
 import { getItemDefinition } from "./ui/items.js"
+import { initHealthUI } from "./player.js"
 
 // =======================
 //    СОЗДАЁМ ДВИЖОК
@@ -190,6 +191,9 @@ noa.world.on("worldDataNeeded", (id, data, x, y, z) => {
 
     // Проверяем что мир сгенерировался и ждем если нужно
     await waitForWorldGeneration()
+
+    // Инициализируем UI здоровья
+    initHealthUI()
 
     // Скрываем окно загрузки после полной инициализации
     hideLoadingScreen()
@@ -687,6 +691,7 @@ function setupInteraction(placeBlockID, blocksMap, waterID) {
         const maxDistance = 5.0
         let closestPig = null
         let closestCow = null
+        let closestBear = null
         let closestDistance = maxDistance
         
         // Проверяем свиней
@@ -740,6 +745,32 @@ function setupInteraction(placeBlockID, blocksMap, waterID) {
             }
         }
         
+        // Проверяем медведей
+        closestDistance = maxDistance
+        const bears = getBears()
+        for (const bear of bears) {
+            const bearPos = noa.entities.getPosition(bear.id)
+            if (!bearPos) continue
+            
+            const dx = bearPos[0] - playerPos[0]
+            const dy = bearPos[1] - playerPos[1]
+            const dz = bearPos[2] - playerPos[2]
+            const distance = Math.sqrt(dx * dx + dy * dy + dz * dz)
+            
+            if (distance > maxDistance) continue
+            
+            const normDx = dx / distance
+            const normDy = dy / distance
+            const normDz = dz / distance
+            
+            const dot = dirX * normDx + dirY * normDy + dirZ * normDz
+            
+            if (dot > 0.7 && distance < closestDistance) {
+                closestDistance = distance
+                closestBear = bear
+            }
+        }
+        
         // Если нашли животное, наносим урон
         // @ts-ignore
         const selectedItem = window.getSelectedItem ? window.getSelectedItem() : null
@@ -771,6 +802,16 @@ function setupInteraction(placeBlockID, blocksMap, waterID) {
             }
             if (damageMultiplier % 1 > 0 && Math.random() < (damageMultiplier % 1)) {
                 damageCow(noa, closestCow)
+            }
+        }
+        
+        // Атакуем медведя
+        if (closestBear) {
+            for (let i = 0; i < Math.floor(damageMultiplier); i++) {
+                damageBear(noa, closestBear)
+            }
+            if (damageMultiplier % 1 > 0 && Math.random() < (damageMultiplier % 1)) {
+                damageBear(noa, closestBear)
             }
         }
     })

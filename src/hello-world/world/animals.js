@@ -5,6 +5,7 @@ import { getHeightAt } from './height.js'
 import { getBiome } from '../biome.js'
 import { createPigMaterial, createCowMaterial } from '../materials.js'
 import { addItem } from '../ui/inventory.js'
+import { damagePlayer } from '../player.js'
 
 // Получаем noa из window (устанавливается в index.js) или из engine.js
 // @ts-ignore
@@ -242,6 +243,7 @@ export function createBear(noa, scene, x, z, y = null, type = "brown", size = "n
         speed: baseSpeed + Math.random() * speedVariation,
         directionChangeTimer: 60 + Math.floor(Math.random() * 60),
         jumpCooldown: 0,
+        attackCooldown: 0,
         size,
         health: maxHealth,
         maxHealth,
@@ -630,6 +632,7 @@ function registerTickHandler() {
         // Определяем, на какое животное смотрит игрок (каждый тик для подсветки)
         let targetedPig = null
         let targetedCow = null
+        let targetedBear = null
         if (currentNoa.playerEntity) {
             const playerPos = currentNoa.entities.getPosition(currentNoa.playerEntity)
             if (playerPos) {
@@ -646,82 +649,7 @@ function registerTickHandler() {
                 // Ищем ближайшее животное в направлении взгляда (до 6 блоков)
                 const maxDistance = 6.0
                 let closestDistance = maxDistance
-                for (const bear of bears) {
-    const { id, mesh, body } = bear
-    if (!mesh || !body) continue
-
-    const pos = currentNoa.entities.getPosition(id)
-    if (!pos) continue
-
-    bear.directionChangeTimer--
-    bear.jumpCooldown--
-    bear.stuckCheckCounter++
-
-    const groundX = Math.floor(pos[0])
-    const groundY = Math.floor(pos[1])
-    const groundZ = Math.floor(pos[2])
-    let under = currentNoa.getBlock(groundX, groundY - 1, groundZ)
-
-    if (under === 0) {
-        under =
-            currentNoa.getBlock(groundX - 1, groundY - 1, groundZ) ||
-            currentNoa.getBlock(groundX + 1, groundY - 1, groundZ) ||
-            currentNoa.getBlock(groundX, groundY - 1, groundZ - 1) ||
-            currentNoa.getBlock(groundX, groundY - 1, groundZ + 1) ||
-            0
-    }
-
-    const bearWidth = body.width || 1.2
-    const bearHeight = body.height || 1.8
-    const checkHeight = Math.ceil(bearHeight)
-
-    // СМЕНА НАПРАВЛЕНИЯ как у коров
-    if (bear.directionChangeTimer <= 0) {
-        const currentMovementAngle = bear.angle || (bear.currentRotation + Math.PI / 2)
-        const randomAngle = Math.random() * Math.PI * 2
-        let angleDiff = randomAngle - currentMovementAngle
-
-        while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
-        while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
-
-        const maxTurn = Math.PI / 2
-        if (angleDiff > maxTurn) angleDiff = maxTurn
-        if (angleDiff < -maxTurn) angleDiff = -maxTurn
-
-        bear.targetAngle = currentMovementAngle + angleDiff
-        while (bear.targetAngle < 0) bear.targetAngle += 2 * Math.PI
-        while (bear.targetAngle >= 2 * Math.PI) bear.targetAngle -= 2 * Math.PI
-
-        bear.directionChangeTimer = 180 + Math.floor(Math.random() * 300)
-    }
-
-    // Поворот головы
-    const targetRotation = bear.targetAngle - Math.PI / 2
-    let angleDiff = targetRotation - bear.currentRotation
-
-    while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
-    while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
-
-    bear.currentRotation += angleDiff * 0.25
-    mesh.rotation.y = bear.currentRotation
-
-    if (Math.abs(angleDiff) < 0.2) {
-        bear.angle = bear.targetAngle
-    }
-
-    // Движение вперед
-    const moveSpeed = bear.speed * 3.5
-    const isOnGround = under !== 0
-
-    if (isOnGround) {
-        body.velocity[0] = Math.sin(bear.currentRotation) * moveSpeed
-        body.velocity[2] = Math.cos(bear.currentRotation) * moveSpeed
-    } else {
-        body.velocity[0] *= 0.8
-        body.velocity[2] *= 0.8
-    }
-}
-
+                
                 // Проверяем свиней
                 for (const pig of pigs) {
                     const pigPos = currentNoa.entities.getPosition(pig.id)
@@ -768,6 +696,31 @@ function registerTickHandler() {
                     if (dot > 0.5 && distance < closestDistance) {
                         closestDistance = distance
                         targetedCow = cow
+                    }
+                }
+                
+                // Проверяем медведей
+                closestDistance = maxDistance
+                for (const bear of bears) {
+                    const bearPos = currentNoa.entities.getPosition(bear.id)
+                    if (!bearPos) continue
+                    
+                    const dx = bearPos[0] - playerPos[0]
+                    const dy = bearPos[1] - playerPos[1]
+                    const dz = bearPos[2] - playerPos[2]
+                    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz)
+                    
+                    if (distance > maxDistance) continue
+                    
+                    const normDx = dx / distance
+                    const normDy = dy / distance
+                    const normDz = dz / distance
+                    
+                    const dot = dirX * normDx + dirY * normDy + dirZ * normDz
+                    
+                    if (dot > 0.5 && distance < closestDistance) {
+                        closestDistance = distance
+                        targetedBear = bear
                     }
                 }
             }
@@ -828,9 +781,159 @@ function registerTickHandler() {
             }
         }
         
+        // Обновляем подсветку для всех медведей (каждый тик)
+        for (const bear of bears) {
+            if (!bear.material || !bear.originalEmissive) continue
+            
+            const shouldHighlight = bear === targetedBear
+            if (bear.isHighlighted !== shouldHighlight) {
+                bear.isHighlighted = shouldHighlight
+                if (shouldHighlight) {
+                    bear.material.emissiveColor.r = Math.min(1, bear.originalEmissive.r * 3)
+                    bear.material.emissiveColor.g = Math.min(1, bear.originalEmissive.g * 3)
+                    bear.material.emissiveColor.b = Math.min(1, bear.originalEmissive.b * 3)
+                    bear.material.diffuseColor.r = Math.min(1, bear.material.diffuseColor.r * 1.2)
+                    bear.material.diffuseColor.g = Math.min(1, bear.material.diffuseColor.g * 1.2)
+                    bear.material.diffuseColor.b = Math.min(1, bear.material.diffuseColor.b * 1.2)
+                } else {
+                    bear.material.emissiveColor.r = bear.originalEmissive.r
+                    bear.material.emissiveColor.g = bear.originalEmissive.g
+                    bear.material.emissiveColor.b = bear.originalEmissive.b
+                    // Возвращаем оригинальный цвет в зависимости от типа медведя
+                    if (bear.type === 'polar') {
+                        bear.material.diffuseColor.r = 0.95
+                        bear.material.diffuseColor.g = 0.95
+                        bear.material.diffuseColor.b = 1.0
+                    } else {
+                        bear.material.diffuseColor.r = 0.45
+                        bear.material.diffuseColor.g = 0.32
+                        bear.material.diffuseColor.b = 0.22
+                    }
+                }
+            }
+        }
+        
+        // ================================
+        // ОБРАБОТКА ПРЕСЛЕДОВАНИЯ И АТАКИ МЕДВЕДЕЙ (каждый тик)
+        // ================================
+        for (const bear of bears) {
+            const { id, mesh, body } = bear
+            if (!mesh || !body) continue
+
+            const pos = currentNoa.entities.getPosition(id)
+            if (!pos) continue
+
+            // Получаем позицию игрока
+            let playerPos = null
+            let distanceToPlayer = Infinity
+            let isPlayerInAggroRange = false
+            const AGGRO_RANGE = 10.0 // Зона агрессии - 10 блоков
+            const ATTACK_RANGE = 2.0 // Зона атаки - 2 блока
+            
+            if (currentNoa.playerEntity) {
+                playerPos = currentNoa.entities.getPosition(currentNoa.playerEntity)
+                if (playerPos) {
+                    const dx = playerPos[0] - pos[0]
+                    const dy = playerPos[1] - pos[1]
+                    const dz = playerPos[2] - pos[2]
+                    distanceToPlayer = Math.sqrt(dx * dx + dy * dy + dz * dz)
+                    isPlayerInAggroRange = distanceToPlayer <= AGGRO_RANGE
+                }
+            }
+
+            // Проверка блока под медведем
+            const groundX = Math.floor(pos[0])
+            const groundY = Math.floor(pos[1])
+            const groundZ = Math.floor(pos[2])
+            let under = currentNoa.getBlock(groundX, groundY - 1, groundZ)
+            if (under === 0) {
+                under = currentNoa.getBlock(groundX - 1, groundY - 1, groundZ) ||
+                        currentNoa.getBlock(groundX + 1, groundY - 1, groundZ) ||
+                        currentNoa.getBlock(groundX, groundY - 1, groundZ - 1) ||
+                        currentNoa.getBlock(groundX, groundY - 1, groundZ + 1) ||
+                        0
+            }
+
+            // ЛОГИКА ДВИЖЕНИЯ К ИГРОКУ (каждый тик для быстрой реакции)
+            if (isPlayerInAggroRange && playerPos) {
+                const dx = playerPos[0] - pos[0]
+                const dz = playerPos[2] - pos[2]
+                const horizontalDistance = Math.sqrt(dx * dx + dz * dz)
+                
+                // Вычисляем угол к игроку
+                let targetAngle = Math.atan2(dx, dz)
+                if (targetAngle < 0) targetAngle += 2 * Math.PI
+                
+                // Устанавливаем целевой угол
+                bear.targetAngle = targetAngle
+                
+                // Плавная интерполяция поворота
+                const targetRotation = bear.targetAngle - Math.PI / 2
+                let angleDiff = targetRotation - bear.currentRotation
+                
+                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+                
+                const rotationSpeed = 0.5 // Быстрее поворачивается к игроку
+                bear.currentRotation += angleDiff * rotationSpeed
+                mesh.rotation.y = bear.currentRotation
+                
+                // Движение к игроку (если не слишком близко для атаки)
+                if (horizontalDistance > ATTACK_RANGE) {
+                    // Проверяем, что медведь на земле
+                    const isOnGround = under !== 0 || (body.velocity[1] >= -0.1 && body.velocity[1] < 0.3)
+                    if (isOnGround) {
+                        const moveSpeed = bear.speed * 6 // Быстрее движется к игроку
+                        body.velocity[0] = Math.sin(bear.currentRotation) * moveSpeed
+                        body.velocity[2] = Math.cos(bear.currentRotation) * moveSpeed
+                        bear.angle = bear.currentRotation + Math.PI / 2
+                    }
+                } else {
+                    // Очень близко к игроку - замедляем для атаки
+                    body.velocity[0] *= 0.8
+                    body.velocity[2] *= 0.8
+                }
+            }
+
+            // АТАКА МЕДВЕДЯ НА ИГРОКА (каждый тик)
+            if (playerPos && isPlayerInAggroRange) {
+                const dx = playerPos[0] - pos[0]
+                const dy = playerPos[1] - pos[1]
+                const dz = playerPos[2] - pos[2]
+                const currentDistance = Math.sqrt(dx * dx + dy * dy + dz * dz)
+                
+                if (currentDistance <= ATTACK_RANGE) {
+                    // Инициализируем таймер атаки, если его еще нет
+                    if (bear.attackCooldown === undefined || bear.attackCooldown === null) {
+                        bear.attackCooldown = 0
+                    }
+                    
+                    bear.attackCooldown--
+                    
+                    // Атакуем каждые 60 тиков (примерно раз в секунду)
+                    if (bear.attackCooldown <= 0) {
+                        const damage = bear.size === 'small' ? 5 : 10
+                        damagePlayer(damage)
+                        bear.attackCooldown = 60 // Кулдаун атаки
+                        console.log(`🐻 Медведь атаковал игрока! Урон: ${damage}, Расстояние: ${currentDistance.toFixed(2)}`)
+                    }
+                } else {
+                    // Игрок в зоне агрессии, но не в зоне атаки - сбрасываем кулдаун
+                    if (bear.attackCooldown > 0) {
+                        bear.attackCooldown = 0
+                    }
+                }
+            } else {
+                // Игрок не в зоне агрессии - сбрасываем кулдаун
+                if (bear.attackCooldown !== undefined) {
+                    bear.attackCooldown = 0
+                }
+            }
+        }
+        
         if (tick % 6 !== 0) return
         
-        if (pigs.length === 0 && cows.length === 0) return
+        if (pigs.length === 0 && cows.length === 0 && bears.length === 0) return
 
         for (const pig of pigs) {
         const { id, mesh, body } = pig
@@ -1582,8 +1685,299 @@ function registerTickHandler() {
             body.velocity[2] *= 0.9
         }
     }
-    })
-}
+    
+    // ================================
+    // ОБРАБОТКА ПАТРУЛИРОВАНИЯ МЕДВЕДЕЙ (только если игрок не в зоне агрессии)
+    // ================================
+    for (const bear of bears) {
+        const { id, mesh, body } = bear
+        if (!mesh || !body) continue
+
+        const pos = currentNoa.entities.getPosition(id)
+        if (!pos) continue
+
+        // Получаем позицию игрока для проверки зоны агрессии
+        let isPlayerInAggroRange = false
+        const AGGRO_RANGE = 10.0 // Зона агрессии - 10 блоков
+        
+        if (currentNoa.playerEntity) {
+            const playerPos = currentNoa.entities.getPosition(currentNoa.playerEntity)
+            if (playerPos) {
+                const dx = playerPos[0] - pos[0]
+                const dy = playerPos[1] - pos[1]
+                const dz = playerPos[2] - pos[2]
+                const distanceToPlayer = Math.sqrt(dx * dx + dy * dy + dz * dz)
+                isPlayerInAggroRange = distanceToPlayer <= AGGRO_RANGE
+            }
+        }
+        
+        // Пропускаем патрулирование, если игрок в зоне агрессии (преследование обрабатывается каждый тик выше)
+        if (isPlayerInAggroRange) {
+            continue
+        }
+
+        // Уменьшаем таймеры
+        bear.directionChangeTimer--
+        bear.jumpCooldown--
+        bear.stuckCheckCounter++
+
+        // Проверка блока под медведем
+        const groundX = Math.floor(pos[0])
+        const groundY = Math.floor(pos[1])
+        const groundZ = Math.floor(pos[2])
+        let under = currentNoa.getBlock(groundX, groundY - 1, groundZ)
+        if (under === 0) {
+            under = currentNoa.getBlock(groundX - 1, groundY - 1, groundZ) ||
+                    currentNoa.getBlock(groundX + 1, groundY - 1, groundZ) ||
+                    currentNoa.getBlock(groundX, groundY - 1, groundZ - 1) ||
+                    currentNoa.getBlock(groundX, groundY - 1, groundZ + 1) ||
+                    0
+        }
+        
+        const bearHeight = body.height || 1.8
+        const bearWidth = body.width || 1.2
+        const checkHeight = Math.ceil(bearHeight)
+        
+        // Проверка застревания (аналогично свиньям и коровам)
+        const centerBlockY = Math.floor(pos[1])
+        const centerBlockX = Math.floor(pos[0])
+        const centerBlockZ = Math.floor(pos[2])
+        
+        const checkPositions = [
+            [centerBlockX, centerBlockY, centerBlockZ],
+            [centerBlockX, centerBlockY + 1, centerBlockZ],
+            [centerBlockX, centerBlockY + 2, centerBlockZ],
+            [centerBlockX - 1, centerBlockY, centerBlockZ],
+            [centerBlockX + 1, centerBlockY, centerBlockZ],
+            [centerBlockX, centerBlockY, centerBlockZ - 1],
+            [centerBlockX, centerBlockY, centerBlockZ + 1],
+        ]
+        
+        let isInsideBlock = false
+        for (const [bx, by, bz] of checkPositions) {
+            const block = currentNoa.getBlock(bx, by, bz)
+            if (block !== 0) {
+                isInsideBlock = true
+                break
+            }
+        }
+        
+        let isNotMoving = false
+        if (bear.stuckCheckCounter >= 20) {
+            const lastPos = bear.lastPosition
+            const horizontalDistance = Math.sqrt(
+                Math.pow(pos[0] - lastPos[0], 2) + 
+                Math.pow(pos[2] - lastPos[2], 2)
+            )
+            const minExpectedDistance = Math.max(0.05, bear.speed * 0.33 * 0.3)
+            isNotMoving = horizontalDistance < minExpectedDistance && 
+                         under !== 0 && 
+                         Math.abs(body.velocity[1]) < 0.3
+            bear.stuckCheckCounter = 0
+            bear.lastPosition = [pos[0], pos[1], pos[2]]
+        }
+        
+        if (isInsideBlock || isNotMoving) {
+            // Логика выталкивания из блока (аналогично свиньям)
+            let foundFreeSpot = false
+            let freeX = pos[0]
+            let freeY = pos[1]
+            let freeZ = pos[2]
+            let bestDistance = Infinity
+            
+            const offsetY = bearHeight / 2
+            
+            for (let radius = 1; radius <= 5; radius++) {
+                for (let dx = -radius; dx <= radius; dx++) {
+                    for (let dz = -radius; dz <= radius; dz++) {
+                        if (dx === 0 && dz === 0) continue
+                        
+                        const checkX = Math.floor(pos[0] + dx)
+                        const checkZ = Math.floor(pos[2] + dz)
+                        for (let dy = -2; dy <= 2; dy++) {
+                            const checkY = Math.floor(pos[1]) + dy
+                            
+                            const blockAtFeet = currentNoa.getBlock(checkX, checkY, checkZ)
+                            const blockAtBody = currentNoa.getBlock(checkX, checkY + 1, checkZ)
+                            const blockUnder = currentNoa.getBlock(checkX, checkY - 1, checkZ)
+                            
+                            let isFree = blockAtFeet === 0 && blockAtBody === 0 && blockUnder !== 0
+                            if (checkHeight > 1) {
+                                const blockAtHead = currentNoa.getBlock(checkX, checkY + 2, checkZ)
+                                isFree = isFree && blockAtHead === 0
+                            }
+                            
+                            if (isFree) {
+                                const distance = Math.sqrt(dx * dx + dz * dz + dy * dy)
+                                if (distance < bestDistance) {
+                                    bestDistance = distance
+                                    foundFreeSpot = true
+                                    freeX = checkX + 0.5
+                                    freeY = checkY + 1 + offsetY
+                                    freeZ = checkZ + 0.5
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (foundFreeSpot) {
+                currentNoa.entities.setPosition(id, [freeX, freeY, freeZ])
+                body.velocity[0] = 0
+                body.velocity[1] = 0
+                body.velocity[2] = 0
+                bear.lastPosition = [freeX, freeY, freeZ]
+            }
+            continue
+        }
+        
+        if (bear.stuckCheckCounter === 0) {
+            bear.lastPosition = [pos[0], pos[1], pos[2]]
+        }
+        
+        if (under === 0) {
+            body.velocity[1] = -0.1
+        }
+
+        // Обычное патрулирование (только если игрок не в зоне агрессии)
+            // Убеждаемся, что у медведя есть целевой угол для движения
+            if (bear.targetAngle === undefined || bear.targetAngle === null) {
+                const currentMovementAngle = bear.angle !== undefined ? bear.angle : (bear.currentRotation + Math.PI / 2)
+                bear.targetAngle = currentMovementAngle
+            }
+            
+            // Периодическая смена направления (каждые 3-8 секунд)
+            if (bear.directionChangeTimer <= 0) {
+                const currentMovementAngle = bear.angle !== undefined ? bear.angle : (bear.currentRotation + Math.PI / 2)
+                const randomAngle = Math.random() * Math.PI * 2
+                let angleDiff = randomAngle - currentMovementAngle
+                
+                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
+                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
+                
+                const maxTurn = Math.PI / 2
+                if (angleDiff > maxTurn) angleDiff = maxTurn
+                if (angleDiff < -maxTurn) angleDiff = -maxTurn
+                
+                bear.targetAngle = currentMovementAngle + angleDiff
+                while (bear.targetAngle < 0) bear.targetAngle += 2 * Math.PI
+                while (bear.targetAngle >= 2 * Math.PI) bear.targetAngle -= 2 * Math.PI
+                
+                bear.directionChangeTimer = 180 + Math.floor(Math.random() * 300)
+            }
+
+            // Плавная интерполяция угла поворота
+            const targetRotation = bear.targetAngle - Math.PI / 2
+            let rotationAngleDiff = targetRotation - bear.currentRotation
+            
+            while (rotationAngleDiff > Math.PI) rotationAngleDiff -= 2 * Math.PI
+            while (rotationAngleDiff < -Math.PI) rotationAngleDiff += 2 * Math.PI
+            
+            const rotationSpeed = 0.3
+            bear.currentRotation += rotationAngleDiff * rotationSpeed
+            mesh.rotation.y = bear.currentRotation
+            
+            if (Math.abs(rotationAngleDiff) < 0.2) {
+                bear.angle = bear.targetAngle
+            }
+
+            // Проверка препятствий и движение
+            if (under !== 0 && Math.abs(body.velocity[1]) < 0.1) {
+                const checkDistance = (bearWidth / 2) + 0.15
+                const fx = pos[0] + Math.sin(bear.currentRotation) * checkDistance
+                const fz = pos[2] + Math.cos(bear.currentRotation) * checkDistance
+                const currentY = Math.floor(pos[1])
+                
+                const blockAtFeet = currentNoa.getBlock(Math.floor(fx), currentY, Math.floor(fz))
+                const blockAtBody = currentNoa.getBlock(Math.floor(fx), currentY + 1, Math.floor(fz))
+                const blockAtHead = checkHeight > 1 ? currentNoa.getBlock(Math.floor(fx), currentY + 2, Math.floor(fz)) : 0
+                
+                if (blockAtFeet !== 0) {
+                    const currentMovementAngle = bear.angle !== undefined ? bear.angle : (bear.currentRotation + Math.PI / 2)
+                    const randomAngle = Math.random() * Math.PI * 2
+                    let obstacleAngleDiff = randomAngle - currentMovementAngle
+                    while (obstacleAngleDiff > Math.PI) obstacleAngleDiff -= 2 * Math.PI
+                    while (obstacleAngleDiff < -Math.PI) obstacleAngleDiff += 2 * Math.PI
+                    const maxTurn = Math.PI / 2
+                    if (obstacleAngleDiff > maxTurn) obstacleAngleDiff = maxTurn
+                    if (obstacleAngleDiff < -maxTurn) obstacleAngleDiff = -maxTurn
+                    bear.targetAngle = currentMovementAngle + obstacleAngleDiff
+                    while (bear.targetAngle < 0) bear.targetAngle += 2 * Math.PI
+                    while (bear.targetAngle >= 2 * Math.PI) bear.targetAngle -= 2 * Math.PI
+                    bear.directionChangeTimer = 15
+                } else if (blockAtBody !== 0 && blockAtFeet === 0 && bear.jumpCooldown <= 0) {
+                    const jumpCheckY = (checkHeight > 1 ? currentY + 2 : currentY + 1) + 1
+                    const jumpCheckBlock = currentNoa.getBlock(Math.floor(fx), jumpCheckY, Math.floor(fz))
+                    
+                    if (jumpCheckBlock === 0) {
+                        body.velocity[1] = 0.4
+                        body.velocity[0] = Math.sin(bear.currentRotation) * bear.speed * 2
+                        body.velocity[2] = Math.cos(bear.currentRotation) * bear.speed * 2
+                        bear.jumpCooldown = 30
+                    } else {
+                        const currentMovementAngle = bear.angle !== undefined ? bear.angle : (bear.currentRotation + Math.PI / 2)
+                        const randomAngle = Math.random() * Math.PI * 2
+                        let obstacleAngleDiff = randomAngle - currentMovementAngle
+                        while (obstacleAngleDiff > Math.PI) obstacleAngleDiff -= 2 * Math.PI
+                        while (obstacleAngleDiff < -Math.PI) obstacleAngleDiff += 2 * Math.PI
+                        const maxTurn = Math.PI / 2
+                        if (obstacleAngleDiff > maxTurn) obstacleAngleDiff = maxTurn
+                        if (obstacleAngleDiff < -maxTurn) obstacleAngleDiff = -maxTurn
+                        bear.targetAngle = currentMovementAngle + obstacleAngleDiff
+                        while (bear.targetAngle < 0) bear.targetAngle += 2 * Math.PI
+                        while (bear.targetAngle >= 2 * Math.PI) bear.targetAngle -= 2 * Math.PI
+                        bear.directionChangeTimer = 15
+                    }
+                }
+            }
+            
+            // Движение в направлении головы
+            const angleDiffForMovement = Math.abs(rotationAngleDiff)
+            const isHeadAligned = angleDiffForMovement < 0.3
+            const moveSpeed = bear.speed * 4
+            const speedMultiplier = isHeadAligned ? 1.0 : Math.max(0.3, 1.0 - angleDiffForMovement / Math.PI)
+            const isOnGround = under !== 0 || (body.velocity[1] >= -0.1 && body.velocity[1] < 0.3)
+            
+            if (isOnGround) {
+                const checkDistance = (bearWidth / 2) + 0.1
+                const nextX = pos[0] + Math.sin(bear.currentRotation) * checkDistance
+                const nextZ = pos[2] + Math.cos(bear.currentRotation) * checkDistance
+                const currentY = Math.floor(pos[1])
+                
+                const blockAtFeet = currentNoa.getBlock(Math.floor(nextX), currentY, Math.floor(nextZ))
+                const blockAtBody = currentNoa.getBlock(Math.floor(nextX), currentY + 1, Math.floor(nextZ))
+                const blockAtHead = checkHeight > 1 ? currentNoa.getBlock(Math.floor(nextX), currentY + 2, Math.floor(nextZ)) : 0
+                
+                if (blockAtFeet !== 0 || blockAtBody !== 0 || blockAtHead !== 0) {
+                    body.velocity[0] = 0
+                    body.velocity[2] = 0
+                    
+                    const currentMovementAngle = bear.angle !== undefined ? bear.angle : (bear.currentRotation + Math.PI / 2)
+                    const randomAngle = Math.random() * Math.PI * 2
+                    let turnAngleDiff = randomAngle - currentMovementAngle
+                    while (turnAngleDiff > Math.PI) turnAngleDiff -= 2 * Math.PI
+                    while (turnAngleDiff < -Math.PI) turnAngleDiff += 2 * Math.PI
+                    const maxTurn = Math.PI / 2
+                    if (turnAngleDiff > maxTurn) turnAngleDiff = maxTurn
+                    if (turnAngleDiff < -maxTurn) turnAngleDiff = -maxTurn
+                    bear.targetAngle = currentMovementAngle + turnAngleDiff
+                    while (bear.targetAngle < 0) bear.targetAngle += 2 * Math.PI
+                    while (bear.targetAngle >= 2 * Math.PI) bear.targetAngle -= 2 * Math.PI
+                    bear.directionChangeTimer = 15
+                } else {
+                    body.velocity[0] = Math.sin(bear.currentRotation) * moveSpeed * speedMultiplier
+                    body.velocity[2] = Math.cos(bear.currentRotation) * moveSpeed * speedMultiplier
+                    bear.angle = bear.currentRotation + Math.PI / 2
+                }
+            } else {
+                body.velocity[0] *= 0.9
+                body.velocity[2] *= 0.9
+            }
+        }
+    }
+    ) // закрытие стрелочной функции currentNoa.on('tick', () => {
+} // закрытие функции registerTickHandler()
 
 // Регистрируем обработчик после небольшой задержки
 setTimeout(registerTickHandler, 100)
@@ -1643,6 +2037,34 @@ export function damageCow(noa, cow) {
         }
         
         noa.entities.deleteEntity(cow.id)
+    }
+}
+
+
+// ------------------------------------------------------------
+// Нанесение урона медведю (вызывается из обработчика fire)
+// ------------------------------------------------------------
+export function damageBear(noa, bear) {
+    if (!bear || bear.health <= 0) return
+    
+    bear.health -= 1
+    console.log(`🐻 Медведь получил урон! Здоровье: ${bear.health}/${bear.maxHealth}`)
+    
+    if (bear.health <= 0) {
+        console.log(`🐻 Медведь исчез!`)
+        
+        // Добавляем мясо медведя в инвентарь (больше всего мяса)
+        // Количество мяса зависит от размера: маленькие - 4-5, обычные - 6-8
+        const meatCount = bear.size === 'small' ? (4 + Math.floor(Math.random() * 2)) : (6 + Math.floor(Math.random() * 3))
+        addItem('bear_meat', meatCount)
+        console.log(`🥩 Получено мяса медведя: ${meatCount}`)
+        
+        const index = bears.indexOf(bear)
+        if (index > -1) {
+            bears.splice(index, 1)
+        }
+        
+        noa.entities.deleteEntity(bear.id)
     }
 }
 
