@@ -630,6 +630,7 @@ function registerTickHandler() {
         // Определяем, на какое животное смотрит игрок (каждый тик для подсветки)
         let targetedPig = null
         let targetedCow = null
+        let targetedBear = null
         if (currentNoa.playerEntity) {
             const playerPos = currentNoa.entities.getPosition(currentNoa.playerEntity)
             if (playerPos) {
@@ -646,82 +647,7 @@ function registerTickHandler() {
                 // Ищем ближайшее животное в направлении взгляда (до 6 блоков)
                 const maxDistance = 6.0
                 let closestDistance = maxDistance
-                for (const bear of bears) {
-    const { id, mesh, body } = bear
-    if (!mesh || !body) continue
-
-    const pos = currentNoa.entities.getPosition(id)
-    if (!pos) continue
-
-    bear.directionChangeTimer--
-    bear.jumpCooldown--
-    bear.stuckCheckCounter++
-
-    const groundX = Math.floor(pos[0])
-    const groundY = Math.floor(pos[1])
-    const groundZ = Math.floor(pos[2])
-    let under = currentNoa.getBlock(groundX, groundY - 1, groundZ)
-
-    if (under === 0) {
-        under =
-            currentNoa.getBlock(groundX - 1, groundY - 1, groundZ) ||
-            currentNoa.getBlock(groundX + 1, groundY - 1, groundZ) ||
-            currentNoa.getBlock(groundX, groundY - 1, groundZ - 1) ||
-            currentNoa.getBlock(groundX, groundY - 1, groundZ + 1) ||
-            0
-    }
-
-    const bearWidth = body.width || 1.2
-    const bearHeight = body.height || 1.8
-    const checkHeight = Math.ceil(bearHeight)
-
-    // СМЕНА НАПРАВЛЕНИЯ как у коров
-    if (bear.directionChangeTimer <= 0) {
-        const currentMovementAngle = bear.angle || (bear.currentRotation + Math.PI / 2)
-        const randomAngle = Math.random() * Math.PI * 2
-        let angleDiff = randomAngle - currentMovementAngle
-
-        while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
-        while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
-
-        const maxTurn = Math.PI / 2
-        if (angleDiff > maxTurn) angleDiff = maxTurn
-        if (angleDiff < -maxTurn) angleDiff = -maxTurn
-
-        bear.targetAngle = currentMovementAngle + angleDiff
-        while (bear.targetAngle < 0) bear.targetAngle += 2 * Math.PI
-        while (bear.targetAngle >= 2 * Math.PI) bear.targetAngle -= 2 * Math.PI
-
-        bear.directionChangeTimer = 180 + Math.floor(Math.random() * 300)
-    }
-
-    // Поворот головы
-    const targetRotation = bear.targetAngle - Math.PI / 2
-    let angleDiff = targetRotation - bear.currentRotation
-
-    while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI
-    while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI
-
-    bear.currentRotation += angleDiff * 0.25
-    mesh.rotation.y = bear.currentRotation
-
-    if (Math.abs(angleDiff) < 0.2) {
-        bear.angle = bear.targetAngle
-    }
-
-    // Движение вперед
-    const moveSpeed = bear.speed * 3.5
-    const isOnGround = under !== 0
-
-    if (isOnGround) {
-        body.velocity[0] = Math.sin(bear.currentRotation) * moveSpeed
-        body.velocity[2] = Math.cos(bear.currentRotation) * moveSpeed
-    } else {
-        body.velocity[0] *= 0.8
-        body.velocity[2] *= 0.8
-    }
-}
-
+                
                 // Проверяем свиней
                 for (const pig of pigs) {
                     const pigPos = currentNoa.entities.getPosition(pig.id)
@@ -768,6 +694,31 @@ function registerTickHandler() {
                     if (dot > 0.5 && distance < closestDistance) {
                         closestDistance = distance
                         targetedCow = cow
+                    }
+                }
+                
+                // Проверяем медведей
+                closestDistance = maxDistance
+                for (const bear of bears) {
+                    const bearPos = currentNoa.entities.getPosition(bear.id)
+                    if (!bearPos) continue
+                    
+                    const dx = bearPos[0] - playerPos[0]
+                    const dy = bearPos[1] - playerPos[1]
+                    const dz = bearPos[2] - playerPos[2]
+                    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz)
+                    
+                    if (distance > maxDistance) continue
+                    
+                    const normDx = dx / distance
+                    const normDy = dy / distance
+                    const normDz = dz / distance
+                    
+                    const dot = dirX * normDx + dirY * normDy + dirZ * normDz
+                    
+                    if (dot > 0.5 && distance < closestDistance) {
+                        closestDistance = distance
+                        targetedBear = bear
                     }
                 }
             }
@@ -828,9 +779,41 @@ function registerTickHandler() {
             }
         }
         
+        // Обновляем подсветку для всех медведей (каждый тик)
+        for (const bear of bears) {
+            if (!bear.material || !bear.originalEmissive) continue
+            
+            const shouldHighlight = bear === targetedBear
+            if (bear.isHighlighted !== shouldHighlight) {
+                bear.isHighlighted = shouldHighlight
+                if (shouldHighlight) {
+                    bear.material.emissiveColor.r = Math.min(1, bear.originalEmissive.r * 3)
+                    bear.material.emissiveColor.g = Math.min(1, bear.originalEmissive.g * 3)
+                    bear.material.emissiveColor.b = Math.min(1, bear.originalEmissive.b * 3)
+                    bear.material.diffuseColor.r = Math.min(1, bear.material.diffuseColor.r * 1.2)
+                    bear.material.diffuseColor.g = Math.min(1, bear.material.diffuseColor.g * 1.2)
+                    bear.material.diffuseColor.b = Math.min(1, bear.material.diffuseColor.b * 1.2)
+                } else {
+                    bear.material.emissiveColor.r = bear.originalEmissive.r
+                    bear.material.emissiveColor.g = bear.originalEmissive.g
+                    bear.material.emissiveColor.b = bear.originalEmissive.b
+                    // Возвращаем оригинальный цвет в зависимости от типа медведя
+                    if (bear.type === 'polar') {
+                        bear.material.diffuseColor.r = 0.95
+                        bear.material.diffuseColor.g = 0.95
+                        bear.material.diffuseColor.b = 1.0
+                    } else {
+                        bear.material.diffuseColor.r = 0.45
+                        bear.material.diffuseColor.g = 0.32
+                        bear.material.diffuseColor.b = 0.22
+                    }
+                }
+            }
+        }
+        
         if (tick % 6 !== 0) return
         
-        if (pigs.length === 0 && cows.length === 0) return
+        if (pigs.length === 0 && cows.length === 0 && bears.length === 0) return
 
         for (const pig of pigs) {
         const { id, mesh, body } = pig
@@ -1643,6 +1626,34 @@ export function damageCow(noa, cow) {
         }
         
         noa.entities.deleteEntity(cow.id)
+    }
+}
+
+
+// ------------------------------------------------------------
+// Нанесение урона медведю (вызывается из обработчика fire)
+// ------------------------------------------------------------
+export function damageBear(noa, bear) {
+    if (!bear || bear.health <= 0) return
+    
+    bear.health -= 1
+    console.log(`🐻 Медведь получил урон! Здоровье: ${bear.health}/${bear.maxHealth}`)
+    
+    if (bear.health <= 0) {
+        console.log(`🐻 Медведь исчез!`)
+        
+        // Добавляем мясо медведя в инвентарь (больше всего мяса)
+        // Количество мяса зависит от размера: маленькие - 4-5, обычные - 6-8
+        const meatCount = bear.size === 'small' ? (4 + Math.floor(Math.random() * 2)) : (6 + Math.floor(Math.random() * 3))
+        addItem('bear_meat', meatCount)
+        console.log(`🥩 Получено мяса медведя: ${meatCount}`)
+        
+        const index = bears.indexOf(bear)
+        if (index > -1) {
+            bears.splice(index, 1)
+        }
+        
+        noa.entities.deleteEntity(bear.id)
     }
 }
 
