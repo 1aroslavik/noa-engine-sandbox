@@ -52,7 +52,96 @@ async function start() {
     setWaterID(ids.waterID)
 
     registerWorldGeneration(noa, ids)
-    
+// =========================================================
+// 🔍 Проверка: вызывается ли worldDataNeeded? 
+// Если нет — перезагрузить страницу
+// =========================================================
+
+let worldgenCalled = false;
+
+// Ловим вызовы worldDataNeeded
+noa.world.on("worldDataNeeded", (id, data, x, y, z) => {
+    worldgenCalled = true;
+});
+
+// Проверяем через 1.5 секунды после старта
+setTimeout(() => {
+    if (!worldgenCalled) {
+        console.error("❌ GEN CALL не был вызван! Генерация МИРА НЕ РАБОТАЕТ!");
+        console.warn("🔄 Перезагрузка страницы...");
+
+        // Перезагрузка
+        location.reload();
+    }
+}, 10000); // 10 секунд
+
+// Ловим ситуацию, когда чанк загрузился, но в нём НЕТ ни одного блока
+noa.world.on("chunkLoaded", (chunkID, chunk) => {
+    const arr = chunk.voxels
+    let solidCount = 0
+
+    for (let i = 0; i < arr.length; i++) {
+        if (arr[i] !== 0) {
+            solidCount++
+            break
+        }
+    }
+
+    if (solidCount === 0) {
+        console.error("❌ ПУСТОЙ ЧАНК -> chunkID:", chunkID)
+
+        const [cx, cy, cz] = chunkID
+        console.error("📍 Координаты чанка:", { cx, cy, cz })
+
+        // Проверяем getHeightAt
+        try {
+            const h = getHeightAt(cx * 32, cz * 32)
+            console.error("📏 getHeightAt вернул:", h)
+
+            if (!Number.isFinite(h)) {
+                console.error("🚨 ОШИБКА: getHeightAt -> NaN или Infinity")
+            }
+            if (h < -1000 || h > 2000) {
+                console.error("🚨 ОШИБКА: нереальная высота:", h)
+            }
+        } catch (e) {
+            console.error("💥 ИСКЛЮЧЕНИЕ В getHeightAt:", e)
+        }
+
+        // Проверяем биом
+        try {
+            const biome = getBiome(cx * 32, cz * 32)
+            console.error("🌍 Биом:", biome)
+        } catch (e) {
+            console.error("💥 getBiome ERROR:", e)
+        }
+
+        // Проверяем воду
+        try {
+            const wl = getHeightAt(cx * 32, cz * 32)
+            if (wl !== -999) {
+                console.warn("💧 Возможно вода заполняет чанк.")
+            }
+        } catch(e) {}
+
+        console.error("🧩 ИТОГ: Чанк пустой. Ищи ошибки в getHeightAt / cave / waterLevel.")
+    }
+})
+
+
+// =========================================================
+// Ловим ошибки внутри генератора чанков
+// =========================================================
+noa.world.on("worldDataNeeded", (id, data, x, y, z) => {
+    try {
+        // просто помечаем вызов
+        // реальная генерация идёт в worldgen.js
+    } catch (err) {
+        console.error("💥 ОШИБКА ВО ВРЕМЯ ГЕНЕРАЦИИ ЧАНКА:", err)
+        console.error("chunk:", { id, x, y, z })
+    }
+})
+
     // Даем движку время на регистрацию обработчика генерации
     await new Promise(resolve => setTimeout(resolve, 200))
     
@@ -304,7 +393,7 @@ async function waitForPlayerSpawn(ids, maxAttempts = 15, delayMs = 150) {
     
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         // Пытаемся заспавнить игрока
-        await spawnPlayerNearWater(ids)
+await spawnPlayerOnSurface(ids)
         
         // Даем движку время на обработку спавна
         await new Promise(resolve => setTimeout(resolve, 100))
@@ -382,66 +471,35 @@ function forceSpawnPlayer(ids) {
 // =======================
 //         СПАВН
 // =======================
-async function spawnPlayerNearWater(ids) {
-    const WATER = ids.waterID
-    console.log("💧 WATER ID =", WATER)
+// =====================================================
+//      ИДЕАЛЬНЫЙ СПАВН: ИГРОК НА ПОВЕРХНОСТИ
+// =====================================================
+async function spawnPlayerOnSurface(ids) {
+    // выбираем безопасную область вокруг (0,0)
+    const x = Math.floor(Math.random() * 40 - 20) // -20..20
+    const z = Math.floor(Math.random() * 40 - 20)
 
-    // случайный регион
-    const baseX = Math.floor(Math.random() * 4000 - 2000)
-    const baseZ = Math.floor(Math.random() * 4000 - 2000)
+    // получаем высоту
+    let h = getHeightAt(x, z)
 
-    let best = null
-    let bestDist = Infinity
-    const R = 200
-
-    for (let dx = -R; dx <= R; dx++) {
-        for (let dz = -R; dz <= R; dz++) {
-            const x = baseX + dx
-            const z = baseZ + dz
-
-            try {
-                const h = getHeightAt(x, z)
-
-                // проверяем воду на высоте h+1
-                const block = noa.getBlock(x, h + 1, z)
-
-                if (block === WATER) {
-                    const d = dx * dx + dz * dz
-                    if (d < bestDist) {
-                        bestDist = d
-                        best = { x, y: h + 4, z }
-                    }
-                }
-            } catch (e) {
-                // Игнорируем ошибки при проверке блоков
-                continue
-            }
-        }
+    if (!Number.isFinite(h)) {
+        console.error("❌ getHeightAt вернул NaN:", { x, z, h })
+        h = 10 // fallback
     }
 
-    if (best) {
-        console.log("💧 Найдена вода, спавн:", best)
-        try {
-            noa.entities.setPosition(noa.playerEntity, [
-                best.x + 0.5,
-                best.y,
-                best.z + 0.5
-            ])
-        } catch (e) {
-            console.warn("⚠️ Ошибка при установке позиции игрока:", e)
-        }
-    } else {
-        console.log("❌ ВОДА НЕ НАЙДЕНА, обычный спавн")
-        try {
-            const y = getHeightAt(baseX, baseZ) + 3
-            noa.entities.setPosition(noa.playerEntity, [
-                baseX + 0.5,
-                y,
-                baseZ + 0.5
-            ])
-        } catch (e) {
-            console.warn("⚠️ Ошибка при установке позиции игрока:", e)
-        }
+    // поднимаем игрока чуть выше поверхности
+    const y = h + 3
+
+    console.log(`🌄 Спавним игрока на поверхности: x=${x}, y=${y}, z=${z}`)
+
+    try {
+        noa.entities.setPosition(noa.playerEntity, [
+            x + 0.5,
+            y,
+            z + 0.5
+        ])
+    } catch (e) {
+        console.error("❌ Ошибка при спавне игрока:", e)
     }
 }
 

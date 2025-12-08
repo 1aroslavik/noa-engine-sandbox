@@ -22,6 +22,7 @@ export { getHeightAt } from "./height.js";
 
 import { createNoise2D } from "simplex-noise";
 import { generatePlantsInChunk } from "./plants.js";
+import { D } from "../../../docs/assets/babylon.39bd9ef3.js";
 // Пещерные шумы (оставляем твои)
 const caveNoiseA = createNoise2D(() => Math.random());
 const caveNoiseB = createNoise2D(() => Math.random());
@@ -60,32 +61,41 @@ export function getWaterLevel(x, z) {
 export function registerWorldGeneration(noa, ids) {
 
     const B = ids.blocks;
-const GRASS_PLANT = ids.grassID;   // новый растительный блок
+    const GRASS_PLANT = ids.grassID; 
 
-    const GRASS  = B["grass"];
-    const DIRT   = B["dirt"];
-    const SAND   = B["sand"];
-    const RED_SAND = B["red_sand"];
-    const DESERT_ROCK = B["desert_rock"];
-    const STONE  = B["stone"];
-    const GRAVEL = B["gravel"];
-    const SNOW_BLOCK = B["snow_block"];
+const ANDESITE = B["andesite"];
+const BOARDS_WOOD = B["boards_wood"];     // FIXED
+const GRANITE = B["granite"];
 
-    const TUNDRA_TOP  = B["tundra_grass_top"];
-    const TUNDRA_SIDE = B["tundra_grass_side"];
+const GRASS = B["grass"];                 // переходная трава
+const GRASS_BLOCK = B["grass_block"];     // полный блок
 
-    const SNOW = B["snow"];
-    const SNOW_SIDE  = B["snow_side"];
-    const ICE        = B["ice"];
+const DIRT = B["dirt"];
+const SAND = B["sand"];
+const RED_SAND = B["red_sand"];
+const DESERT_ROCK = B["desert_rock"];
+const STONE = B["stone"];
+const GRAVEL = B["gravel"];
 
-    const SNOW_TRANS = B["snow_transition_side"] || SNOW_SIDE;
+const SNOW_BLOCK = B["snow_block"];
+const SNOW = B["snow"];
+const SNOW_SIDE = B["snow_side"];
+const SNOW_TRANS = B["snow_transition_side"] || SNOW_SIDE;
 
-    const GRASS_DRY_TOP = B["grass_dry_top"];
-    const GRASS_DRY_SIDE = B["grass_dry_side"];
+const ICE = B["ice"];
 
-    const WATER = ids.waterID;
+const TUNDRA_GRASS = B["tundra_grass"];               // переход
+const TUNDRA_GRASS_BLOCK = B["tundra_grass_block"];   // полный блок
+
+const GRASS_DRY = B["grass_dry"];                     // переход
+const GRASS_DRY_BLOCK = B["grass_dry_block"];         // полный блок
+
+const WATER = ids.waterID;
+    
 
     noa.world.on("worldDataNeeded", (id, data, x, y, z) => {
+        console.log("GEN CALL", id, data.shape)
+        
         // Логируем только первые несколько чанков для отладки
         if (y === 0 && (Math.abs(x) < 100 && Math.abs(z) < 100)) {
             console.log(`🌍 Генерация чанка: x=${x}, y=${y}, z=${z}, id=${id}`)
@@ -129,10 +139,6 @@ const GRASS_PLANT = ids.grassID;   // новый растительный бло
 
                         continue;
                     }
-
-                    // =====================================================
-                    // ADVANCED SURFACE FORMATIONS
-                    // =====================================================
 
 // =====================================================
 // ДЕКОР БИОМОВ — БЕЗ ПЕЩЕР И РАЗЛОМОВ
@@ -200,7 +206,7 @@ if (biome === "ice") {
 
         // подсушенная трава местами
         if (F(_caveWormA, wx, wz, 0.05) < 0.018) {
-            data.set(i, j, k, GRASS_DRY_TOP);
+            data.set(i, j, k, GRASS_DRY_BLOCK);
             continue;
         }
     }
@@ -313,7 +319,7 @@ if (biome === "ice") {
 
         // жёлтая сухая трава пятнами
         if (F(_caveCheese, wx, wz, 0.03) < 0.02) {
-            data.set(i, j, k, GRASS_DRY_TOP);
+            data.set(i, j, k, GRASS_DRY);
             continue;
         }
 
@@ -379,37 +385,32 @@ if (wy >= height - 4 && wy <= height) {
 
 
 
-                    // =====================================================
-                    // ПОДПОВЕРХНОСТЬ
-                    // =====================================================
-                    if (wy < height) {
+// ПОДПОВЕРХНОСТЬ (как в Minecraft)
+if (wy < height) {
 
-                        switch (biome) {
+    const depth = height - wy;
 
-                            case "desert":
-                                data.set(i, j, k, SAND);
-                                break;
-
-                            case "red_desert":
-                                data.set(i, j, k, RED_SAND);
-                                break;
-
-                            case "tundra":
-                            case "snow":
-                                data.set(i, j, k, DIRT);
-                                break;
-
-                            case "ice":
-                                data.set(i, j, k, ICE);
-                                break;
-
-                            default:
-                                data.set(i, j, k, DIRT);
-                                break;
-                        }
-
-                        continue;
-                    }
+    // 1–3 блока под поверхностью — всегда земля
+    if (depth <= 5) {
+        data.set(i, j, k, GRASS);
+        continue;
+    }
+    if (depth <= 15) {
+        data.set(i, j, k, DIRT);
+        continue;
+    }
+        if (depth <= 25) {
+        data.set(i, j, k, GRAVEL);
+        continue;
+    }
+            if (depth <= 35) {
+        data.set(i, j, k, ANDESITE);
+        continue;
+    }
+    // Все, что глубже — камень (для нормальных гор)
+    data.set(i, j, k, STONE);
+    continue;
+}
 
                     // =====================================================
                     // ПОВЕРХНОСТЬ (БАЗОВАЯ)
@@ -427,7 +428,12 @@ if (wy >= height - 4 && wy <= height) {
                                 continue;
 
                             case "tundra":
-                                data.set(i, j, k, TUNDRA_TOP);
+                                // 20% плитки станут полноценными блоками снега
+                                if (Math.random() < 0.20) {
+                                    data.set(i, j, k, TUNDRA_GRASS_BLOCK);   // ❄ плотный снег
+                                    continue;
+                                }
+                                data.set(i, j, k, TUNDRA_GRASS);
                                 if (j > 0) data.set(i, j - 1, k, DIRT);
                                 continue;
                             case "snow":
@@ -454,13 +460,18 @@ if (wy >= height - 4 && wy <= height) {
                                 
 
                             case "dry":
-                                data.set(i, j, k, GRASS_DRY_TOP);
+                                // 20% плитки станут полноценными блоками снега
+                                if (Math.random() < 0.20) {
+                                    data.set(i, j, k, GRASS_DRY_BLOCK);   // ❄ плотный снег
+                                    continue;
+                                }
+                                data.set(i, j, k, GRASS_DRY);
                                 if (j > 0) data.set(i, j - 1, k, DIRT);
                                 continue;
 
                             default:
                                 data.set(i, j, k, GRASS);
-                                if (j > 0) data.set(i, j - 1, k, DIRT);
+                                //if (j > 0) data.set(i, j - 1, k, DIRT);
                                 continue;
                         }
                     }
