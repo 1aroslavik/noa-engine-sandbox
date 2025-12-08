@@ -4,7 +4,7 @@ This document describes the procedural generation systems implemented in the pro
 
 ---
 
-# 🌍 1. Terrain Generation
+#  1. Terrain Generation
 
 Terrain height is computed using **layered simplex noise**:
 
@@ -29,7 +29,7 @@ Where A/B/C/D are scaling constants tuned for playability.
 
 ---
 
-# 🌡 2. Runtime Biome Classification
+# 2. Runtime Biome Classification
 
 Biomes are determined at **runtime during chunk generation**.
 
@@ -60,7 +60,7 @@ Biomes control:
 
 ---
 
-# 🧱 3. Runtime Neural Texture Generation (CVAE)
+# 3. Runtime Neural Texture Generation (CVAE)
 
 Textures are generated **with no PNG assets**, using a **Conditional Variational Autoencoder (CVAE)**.
 
@@ -99,12 +99,12 @@ It returns generated textures for every class:
 - logs: side + top  
 - desert rocks, sands, gravel, granite  
 - snow transition textures  
-
+etc.
 Textures load during game start and populate all NOA materials dynamically.
 
 ---
 
-# 🌲 4. Procedural Trees (L-Systems)
+# 4. Procedural Trees (L-Systems)
 
 Two species implemented:
 
@@ -139,26 +139,7 @@ Both trees adjust to:
 
 ---
 
-# 🍄 5. Procedural Mushrooms
-
-Two types:
-
-- **Red mushroom**  
-- **Brown mushroom**
-
-Generation rules:
-
-```
-if biome is forest or plains
-   and humidity > threshold
-   and under tree shadow
-```
-
-Mushroom size slightly varies (cap height, width, stem thickness).
-
----
-
-# 🐷 6. Procedural Animals & AI
+# 5. Procedural Animals & AI
 
 Animals generated:
 
@@ -166,7 +147,7 @@ Animals generated:
 - cows (small/normal)
 - bears (brown, polar, small/normal)
 
-## 6.1 Spawn Logic
+## 5.1 Spawn Logic
 
 Spawn depends on biome:
 
@@ -176,13 +157,7 @@ brown bears → forest, mountains, dry
 polar bears → snow, tundra, ice  
 ```
 
-Spawn ensures:
-
-- no animals too close to each other  
-- free space checks (ground + two air blocks)  
-- proximity to player avoided
-
-## 6.2 Movement AI
+## 5.2 Movement AI
 
 Each animal has:
 
@@ -194,34 +169,7 @@ Each animal has:
   - checks if movement < threshold
   - relocates to nearest free position
 
-Movement uses:
-
-```
-velocity.x = sin(rotation) * speed  
-velocity.z = cos(rotation) * speed
-```
-
-Speed differs for small/normal variants.
-
-## 6.3 Panic System
-
-Animals flee when damaged:
-
-```
-panicTimer = 120 ticks  
-speed *= 1.5  
-direction = opposite of player  
-```
-
-Polar bears flee faster than brown bears.
-
-## 6.4 Highlight System
-
-Animal under player's crosshair temporarily increases emissiveColor for selection feedback.
-
----
-
-# 🧊 7. Dynamic Block System
+# 6. Dynamic Block System
 
 Blocks are created from CVAE textures:
 
@@ -245,7 +193,7 @@ This eliminates sharp edges between biomes.
 
 ---
 
-# 💧 8. Fluids
+# 7. Fluids
 
 A runtime water block is created:
 
@@ -257,7 +205,7 @@ Used for lakes, rivers, mountain meltwater.
 
 ---
 
-# 🎮 9. Seed-Based Reproducibility
+# 8. Seed-Based Reproducibility
 
 Before every worldgen step:
 
@@ -285,5 +233,4 @@ This system implements:
 ✔ procedural flora  
 ✔ generative animals  
 ✔ survival-style ecosystem  
-✔ complete Grade 10 requirements  
 
