@@ -12,6 +12,7 @@ import {
     _caveWormB,
     _caveCrack
 } from "../biome.js";
+import { isCave, isSurfaceCave } from "./caves.js";
 
 import { generateTreesInChunk } from "./trees.js";
 import { generateAnimalsInChunk } from "./animals.js";
@@ -25,6 +26,7 @@ import { generatePlantsInChunk } from "./plants.js";
 const caveNoiseA = createNoise2D(() => Math.random());
 const caveNoiseB = createNoise2D(() => Math.random());
 const ravineNoise = createNoise2D(() => Math.random());
+const iceSpikeNoise = createNoise2D(() => Math.random());
 
 function N2(fn, x, z, s) {
     return fn(x * s, z * s);
@@ -117,10 +119,7 @@ const GRASS_PLANT = ids.grassID;   // новый растительный бло
                     // =====================================================
                     if (wLevel !== -999 && wy < wLevel) {
 
-                        if (biome === "ice") {
-                            data.set(i, j, k, SNOW_SIDE);
-                            continue;
-                        }
+                      
 
                         const depth = wLevel - wy;
 
@@ -139,6 +138,48 @@ const GRASS_PLANT = ids.grassID;   // новый растительный бло
 // ДЕКОР БИОМОВ — БЕЗ ПЕЩЕР И РАЗЛОМОВ
 // =====================================================
 if (y === 0 && wy === height) {
+    // -------------------------
+// 🧊 ICE — ЛЕДЯНОЙ БИОМ
+// -------------------------
+if (biome === "ice") {
+
+    // Генерация ледяных пиков (Ice Spikes)
+    const spike = F(iceSpikeNoise, wx, wz, 0.015);
+
+    // Большие пики
+    if (spike < 0.008) {
+        const spikeHeight = Math.floor(12 + Math.random() * 18); // 12–30
+        for (let h = 0; h < spikeHeight; h++) {
+            if (j + h < SY) data.set(i, j + h, k, ICE);
+        }
+        continue;
+    }
+
+    // Средние пики
+    if (spike < 0.018) {
+        const spikeHeight = Math.floor(6 + Math.random() * 8); // 6–14
+        for (let h = 0; h < spikeHeight; h++) {
+            if (j + h < SY) data.set(i, j + h, k, ICE);
+        }
+        continue;
+    }
+
+    // Малые пики
+    if (spike < 0.04) {
+        const spikeHeight = Math.floor(2 + Math.random() * 4); // 2–5
+        for (let h = 0; h < spikeHeight; h++) {
+            if (j + h < SY) data.set(i, j + h, k, ICE);
+        }
+        continue;
+    }
+
+    // Базовая поверхность
+    data.set(i, j, k, ICE);
+    if (j > 0) data.set(i, j - 1, k, DIRT);
+    if (j > 1) data.set(i, j - 2, k, DIRT);
+
+    continue;
+}
 
     // -------------------------
     // 🌿 PLAINS — РАВНИНЫ
@@ -310,13 +351,33 @@ if (biome === "tundra" && wy < height - 4 && wy > height - 10) {
 }
 
 
-                    // =====================================================
-                    // ГЛУБИНА
-                    // =====================================================
-                    if (wy < height - 4) {
-                        data.set(i, j, k, STONE);
-                        continue;
-                    }
+// Часть подземелья
+if (wy < height - 4) {
+
+    // Обычные пещеры
+    if (isCave(wx, wy, wz)) {
+        data.set(i, j, k, 0);
+        continue;
+    }
+
+    data.set(i, j, k, STONE);
+    continue;
+}
+
+// -------------------------
+// ВЫХОДЫ ПЕЩЕР НА ПОВЕРХНОСТЬ
+// -------------------------
+
+if (wy >= height - 4 && wy <= height) {
+
+    if (isCave(wx, wy, wz) || isSurfaceCave(wx, wy, wz, height)) {
+        // Это вход в пещеру
+        data.set(i, j, k, 0);
+        continue;
+    }
+}
+
+
 
                     // =====================================================
                     // ПОДПОВЕРХНОСТЬ
@@ -339,7 +400,7 @@ if (biome === "tundra" && wy < height - 4 && wy > height - 10) {
                                 break;
 
                             case "ice":
-                                data.set(i, j, k, SNOW_SIDE);
+                                data.set(i, j, k, ICE);
                                 break;
 
                             default:
@@ -384,19 +445,13 @@ if (biome === "tundra" && wy < height - 4 && wy > height - 10) {
                                 continue;
 
 
-                                case "ice":
-                                    // верх — лёд
-                                    data.set(i, j, k, ICE);
+                            case "ice":
+                                data.set(i, j, k, ICE);      // верхний слой — светлый морозный снег
+                                if (j > 0) data.set(i, j - 1, k, DIRT);
+                                if (j > 1) data.set(i, j - 2, k, DIRT);
+                                continue;
 
-                                    // ❄ под льдом — снег (НЕ SNOW_TRANS!)
-                                    if (j > 0) data.set(i, j - 1, k, SNOW_BLOCK);
-
-                                    // ниже — земля
-                                    if (j > 1) data.set(i, j - 2, k, DIRT);
-                                    if (j > 2) data.set(i, j - 3, k, DIRT);
-
-                                    continue;
-
+                                
 
                             case "dry":
                                 data.set(i, j, k, GRASS_DRY_TOP);
@@ -421,11 +476,6 @@ if (biome === "tundra" && wy < height - 4 && wy > height - 10) {
                 // =====================================================
                 if (wLevel !== -999) {
                     for (let wy = y; wy < y + SY; wy++) {
-
-                        if (biome === "ice") {
-                            if (wy <= height) continue;
-                            if (wy <= wLevel) continue;
-                        }
 
                         if (wy > height && wy <= wLevel) {
                             data.set(i, wy - y, k, WATER);
