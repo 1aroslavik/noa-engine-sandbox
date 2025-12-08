@@ -85,6 +85,10 @@ async function start() {
         ids.blocks["grass"] ||
         Object.values(ids.blocks)[0]
 
+    // Сохраняем blocksMap глобально для динамического доступа
+    // @ts-ignore
+    window.blocksMap = ids.blocks
+    
     setupInteraction(grassBlock, ids.blocks, ids.waterID)
 
     // ======= СПАВН У ВОДЫ =======
@@ -468,6 +472,23 @@ function setupInteraction(placeBlockID, blocksMap, waterID) {
         blockIdToName[id] = name
     }
     
+    // Сохраняем blockIdToName глобально для обновления
+    // @ts-ignore
+    window.blockIdToName = blockIdToName
+    
+    // Слушаем события регистрации новых блоков
+    window.addEventListener('blockRegistered', (event) => {
+        // @ts-ignore
+        const detail = event.detail
+        const blockName = detail.blockName
+        const blockId = detail.blockId
+        
+        // Обновляем обратный маппинг
+        // @ts-ignore
+        window.blockIdToName[blockId] = blockName
+        console.log(`✅ Обновлен blockIdToName: ${blockId} -> ${blockName}`)
+    })
+    
     // Функция для определения названия предмета на основе блока и биома
     function getItemNameFromBlock(blockName, x, z) {
         // Дерево/бревна - всегда одинаковые
@@ -728,32 +749,149 @@ function setupInteraction(placeBlockID, blocksMap, waterID) {
         'gravel': blocksMap['gravel'] || null,
         'andesite': blocksMap['andesite'] || null,
         'granite': blocksMap['granite'] || null,
+        
+        // Смешанные блоки (из крафтинга)
+        'dark_log': blocksMap['dark_log'] || null,
+        'stone_log': blocksMap['stone_log'] || null,
+        'mud_stone': blocksMap['mud_stone'] || null,
+        'sandy_log': blocksMap['sandy_log'] || null,
+    }
+    
+    // Функция для получения имени блока из имени предмета
+    function getBlockNameFromItemName(itemName) {
+        console.log(`🔍 Преобразование имени предмета в блок: ${itemName}`)
+        
+        // Если предмет начинается с org_, min_, syn_, пытаемся извлечь базовое имя
+        if (itemName.startsWith('org_') || itemName.startsWith('min_') || itemName.startsWith('syn_')) {
+            const parts = itemName.split('_')
+            if (parts.length >= 3) {
+                // Извлекаем базовое имя (пропускаем префикс типа и суффикс редкости)
+                const baseParts = parts.slice(1, -1) // Убираем первый (тип) и последний (редкость)
+                const baseName = baseParts.join('_')
+                
+                console.log(`🔍 Извлечено базовое имя: ${baseName} из ${itemName}`)
+                
+                // Проверяем известные маппинги для смешанных блоков
+                const mixedBlockMapping = {
+                    'log_dirt': 'dark_log',
+                    'dirt_log': 'dark_log',
+                    'log_stone': 'stone_log',
+                    'stone_log': 'stone_log',
+                    'dirt_stone': 'mud_stone',
+                    'stone_dirt': 'mud_stone',
+                    'log_sand': 'sandy_log',
+                    'sand_log': 'sandy_log',
+                    // Дополнительные варианты для разных порядков
+                    'dirt_plains': 'dirt',
+                    'plains_dirt': 'dirt',
+                    'dirt_tundra': 'dirt',
+                    'tundra_dirt': 'dirt',
+                    'dirt_desert': 'dirt',
+                    'desert_dirt': 'dirt',
+                    'dirt_mountain': 'dirt',
+                    'mountain_dirt': 'dirt'
+                }
+                
+                // Проверяем маппинг (с учетом разных порядков - сортируем части)
+                const sortedBaseName = baseName.split('_').sort().join('_')
+                console.log(`🔍 Отсортированное базовое имя: ${sortedBaseName}`)
+                
+                for (const [key, value] of Object.entries(mixedBlockMapping)) {
+                    const sortedKey = key.split('_').sort().join('_')
+                    if (sortedBaseName === sortedKey) {
+                        console.log(`✅ Маппинг найден: ${baseName} (${sortedBaseName}) -> ${value}`)
+                        return value
+                    }
+                }
+                
+                // Прямая проверка
+                if (mixedBlockMapping[baseName]) {
+                    console.log(`✅ Маппинг найден (прямой): ${baseName} -> ${mixedBlockMapping[baseName]}`)
+                    return mixedBlockMapping[baseName]
+                }
+                
+                // Если базовое имя содержит известные блоки (dirt, stone, log, sand и т.д.)
+                // Проверяем, есть ли такой блок в blocksMap
+                // @ts-ignore
+                const globalBlocksMap = window.blocksMap
+                if (globalBlocksMap && globalBlocksMap[baseName]) {
+                    console.log(`✅ Блок найден по базовому имени: ${baseName}`)
+                    return baseName
+                }
+                
+                // Если базовое имя содержит подстроку известного блока, используем его
+                // Например: dirt_plains -> dirt, stone_mountain -> stone
+                const knownBlocks = ['dirt', 'stone', 'log', 'sand', 'gravel', 'andesite', 'granite', 'grass']
+                for (const knownBlock of knownBlocks) {
+                    if (baseName.includes(knownBlock) && globalBlocksMap && globalBlocksMap[knownBlock]) {
+                        console.log(`✅ Маппинг ${baseName} -> ${knownBlock} (по подстроке)`)
+                        return knownBlock
+                    }
+                }
+                
+                // Если не нашли в маппинге, возвращаем базовое имя
+                console.log(`⚠ Маппинг не найден для ${baseName}, возвращаем базовое имя`)
+                return baseName
+            }
+        }
+        
+        // Если не сгенерированный предмет, возвращаем как есть
+        console.log(`ℹ️ Предмет ${itemName} не сгенерированный, возвращаем как есть`)
+        return itemName
+    }
+    
+    // Функция для создания блока на лету для предмета, если его нет
+    async function ensureBlockForItem(itemName) {
+        const blockName = getBlockNameFromItemName(itemName)
+        
+        // Проверяем, есть ли уже блок
+        // @ts-ignore
+        const globalBlocksMap = window.blocksMap
+        if (globalBlocksMap && globalBlocksMap[blockName]) {
+            return globalBlocksMap[blockName]
+        }
+        
+        // Если блок не найден, но это известный базовый блок, возвращаем null
+        // (не создаем блоки для неизвестных комбинаций автоматически)
+        console.log(`⚠ Блок ${blockName} не найден для предмета ${itemName}`)
+        return null
     }
     
     // Функция для получения блока по имени предмета
     function getBlockForItem(itemName) {
-        // Сначала проверяем маппинг
+        // Сначала проверяем статический маппинг
         if (itemToBlockMap[itemName] !== undefined) {
             return itemToBlockMap[itemName]
         }
         
-        // Если предмет - сгенерированный (org_, min_, syn_), не размещаем
-        if (itemName.startsWith('org_') || itemName.startsWith('min_') || itemName.startsWith('syn_')) {
-            return null
+        // Получаем имя блока из имени предмета
+        const blockName = getBlockNameFromItemName(itemName)
+        console.log(`🔍 Преобразование предмета в блок: ${itemName} -> ${blockName}`)
+        
+        // Пытаемся найти блок с таким именем в исходном blocksMap
+        if (blocksMap[blockName]) {
+            console.log(`✅ Найден блок в blocksMap: ${blockName} -> ID ${blocksMap[blockName]}`)
+            return blocksMap[blockName]
         }
         
-        // Пытаемся найти блок с таким же именем
-        if (blocksMap[itemName]) {
-            return blocksMap[itemName]
+        // Проверяем глобальный blocksMap (для динамически созданных блоков)
+        // @ts-ignore
+        const globalBlocksMap = window.blocksMap
+        if (globalBlocksMap && globalBlocksMap[blockName]) {
+            console.log(`✅ Найден динамический блок для размещения: ${blockName} -> ID ${globalBlocksMap[blockName]}`)
+            return globalBlocksMap[blockName]
         }
         
         // Если ничего не найдено, возвращаем null
+        console.log(`⚠ Блок не найден для предмета: ${itemName} (искали блок: ${blockName})`)
+        // @ts-ignore
+        console.log('Доступные блоки:', Object.keys(globalBlocksMap || blocksMap))
         return null
     }
     
     // E обрабатывается в crafting.js для открытия окна крафта
     // alt-fire привязан только к R, поэтому E не будет использоваться для размещения блоков
-    noa.inputs.down.on("alt-fire", () => {
+    noa.inputs.down.on("alt-fire", async () => {
         if (noa.targetedBlock) {
             const p = noa.targetedBlock.adjacent
             
@@ -767,11 +905,24 @@ function setupInteraction(placeBlockID, blocksMap, waterID) {
             }
             
             // Получаем блок для этого предмета
-            const blockToPlace = getBlockForItem(selectedItem.name)
+            let blockToPlace = getBlockForItem(selectedItem.name)
+            
+            // Если блок не найден, пытаемся создать его на лету
+            if (!blockToPlace) {
+                blockToPlace = await ensureBlockForItem(selectedItem.name)
+            }
             
             if (!blockToPlace) {
+                console.log(`⚠ Не удалось найти блок для предмета: ${selectedItem.name}`)
+                // @ts-ignore
+                const globalBlocksMap = window.blocksMap
+                if (globalBlocksMap) {
+                    console.log('Доступные блоки в blocksMap:', Object.keys(globalBlocksMap))
+                }
                 return // Не размещаем, если блок не найден
             }
+            
+            console.log(`🔨 Размещаем блок: ${selectedItem.name} -> ID ${blockToPlace} в позиции (${p[0]}, ${p[1]}, ${p[2]})`)
             
             // Размещаем блок
             noa.setBlock(blockToPlace, p[0], p[1], p[2])

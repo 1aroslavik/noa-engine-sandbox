@@ -245,6 +245,36 @@ export const ITEM_DEFINITIONS = {
     craftDifficulty: CRAFT_DIFFICULTY.TRIVIAL,
     description: 'Гравий'
   },
+  
+  // === СМЕШАННЫЕ БЛОКИ (из крафтинга) ===
+  'dark_log': {
+    name: 'dark_log',
+    rarity: RARITY.UNCOMMON,
+    type: MATERIAL_TYPE.ORGANIC,
+    craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: 'Темное дерево (смешано с землей)'
+  },
+  'stone_log': {
+    name: 'stone_log',
+    rarity: RARITY.UNCOMMON,
+    type: MATERIAL_TYPE.SYNTHETIC,
+    craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: 'Каменное дерево (смешано с камнем)'
+  },
+  'mud_stone': {
+    name: 'mud_stone',
+    rarity: RARITY.UNCOMMON,
+    type: MATERIAL_TYPE.MINERAL,
+    craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: 'Грязный камень (смешан с землей)'
+  },
+  'sandy_log': {
+    name: 'sandy_log',
+    rarity: RARITY.UNCOMMON,
+    type: MATERIAL_TYPE.ORGANIC,
+    craftDifficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: 'Песчаное дерево (смешано с песком)'
+  },
   'andesite': {
     name: 'andesite',
     rarity: RARITY.UNCOMMON,
@@ -445,7 +475,12 @@ export function getShortName(itemName) {
     'biome_block_tundra': 'BiomeT',
     'biome_block_desert': 'BiomeD',
     'biome_block_mountain': 'BiomeM',
-    'biome_block_hybrid': 'BiomeH'
+    'biome_block_hybrid': 'BiomeH',
+    // Смешанные блоки
+    'dark_log': 'DarkLog',
+    'stone_log': 'StnLog',
+    'mud_stone': 'MudStn',
+    'sandy_log': 'SndLog'
   }
   
   // Если есть короткое название, используем его

@@ -120,6 +120,12 @@ function drawInventory() {
 drawInventory()
 
 export function addItem(name, count = 1) {
+  // Проверяем, что name валидный
+  if (!name || name === 'null' || name === '') {
+    console.warn('Попытка добавить невалидный предмет:', name)
+    return false
+  }
+  
   // стакаем по имени
   for (let i = 0; i < HOTBAR_SLOTS; i++) {
     if (inventory[i]?.name === name) {

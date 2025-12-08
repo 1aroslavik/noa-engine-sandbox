@@ -22,12 +22,94 @@ const baseRecipes = [
     result: { name: "stick", count: 4 },
     difficulty: CRAFT_DIFFICULTY.EASY,
     description: "Изготовление палок из досок"
+  },
+  // === РЕЦЕПТЫ СМЕШИВАНИЯ БЛОКОВ ===
+  {
+    pattern: [
+      ["dirt", "log"],
+      [null, null]
+    ],
+    result: { name: "dark_log", count: 1 },
+    difficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: "Смешивание земли с деревом - темное дерево",
+    textureMix: { texture1: "log_side", texture2: "dirt", ratio: 0.3, resultName: "dark_log_side" }
+  },
+  {
+    pattern: [
+      ["log", "dirt"],
+      [null, null]
+    ],
+    result: { name: "dark_log", count: 1 },
+    difficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: "Смешивание дерева с землей - темное дерево",
+    textureMix: { texture1: "log_side", texture2: "dirt", ratio: 0.3, resultName: "dark_log_side" }
+  },
+  {
+    pattern: [
+      ["stone", "log"],
+      [null, null]
+    ],
+    result: { name: "stone_log", count: 1 },
+    difficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: "Смешивание камня с деревом - каменное дерево",
+    textureMix: { texture1: "log_side", texture2: "stone", ratio: 0.4, resultName: "stone_log_side" }
+  },
+  {
+    pattern: [
+      ["log", "stone"],
+      [null, null]
+    ],
+    result: { name: "stone_log", count: 1 },
+    difficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: "Смешивание дерева с камнем - каменное дерево",
+    textureMix: { texture1: "log_side", texture2: "stone", ratio: 0.4, resultName: "stone_log_side" }
+  },
+  {
+    pattern: [
+      ["dirt", "stone"],
+      [null, null]
+    ],
+    result: { name: "mud_stone", count: 1 },
+    difficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: "Смешивание земли с камнем - грязный камень",
+    textureMix: { texture1: "stone", texture2: "dirt", ratio: 0.35, resultName: "mud_stone" }
+  },
+  {
+    pattern: [
+      ["stone", "dirt"],
+      [null, null]
+    ],
+    result: { name: "mud_stone", count: 1 },
+    difficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: "Смешивание камня с землей - грязный камень",
+    textureMix: { texture1: "stone", texture2: "dirt", ratio: 0.35, resultName: "mud_stone" }
+  },
+  {
+    pattern: [
+      ["sand", "log"],
+      [null, null]
+    ],
+    result: { name: "sandy_log", count: 1 },
+    difficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: "Смешивание песка с деревом - песчаное дерево",
+    textureMix: { texture1: "log_side", texture2: "sand", ratio: 0.3, resultName: "sandy_log_side" }
+  },
+  {
+    pattern: [
+      ["log", "sand"],
+      [null, null]
+    ],
+    result: { name: "sandy_log", count: 1 },
+    difficulty: CRAFT_DIFFICULTY.NORMAL,
+    description: "Смешивание дерева с песком - песчаное дерево",
+    textureMix: { texture1: "log_side", texture2: "sand", ratio: 0.3, resultName: "sandy_log_side" }
   }
   // Инструменты временно отключены
 ]
 
 // === ДИНАМИЧЕСКИ ГЕНЕРИРУЕМЫЕ РЕЦЕПТЫ ===
 let generatedRecipes = []
+// Базовые рецепты идут ПЕРВЫМИ, чтобы иметь приоритет
 export let recipes = [...baseRecipes, ...generatedRecipes]
 
 // === ГЕНЕРАЦИЯ РЕЦЕПТОВ НА ОСНОВЕ ИНВЕНТАРЯ ===
@@ -80,12 +162,38 @@ function generateRecipes() {
   }
   
   // Правило 2: 2 разных предмета одной редкости и типа = предмет следующей редкости
+  // НО: пропускаем комбинации, которые уже есть в базовых рецептах
+  const baseRecipePatterns = new Set()
+  for (const baseRecipe of baseRecipes) {
+    if (baseRecipe.pattern) {
+      const items = []
+      for (let y = 0; y < 2; y++) {
+        for (let x = 0; x < 2; x++) {
+          if (baseRecipe.pattern[y][x]) {
+            items.push(baseRecipe.pattern[y][x])
+          }
+        }
+      }
+      if (items.length >= 2) {
+        const sorted = [...items].sort().join('+')
+        baseRecipePatterns.add(sorted)
+      }
+    }
+  }
+  
   for (let i = 0; i < availableItems.length && generated.size < targetRecipeCount; i++) {
     for (let j = i + 1; j < availableItems.length && generated.size < targetRecipeCount; j++) {
       const item1 = availableItems[i]
       const item2 = availableItems[j]
       const def1 = getItemDefinition(item1)
       const def2 = getItemDefinition(item2)
+      
+      // Пропускаем комбинации, которые уже есть в базовых рецептах
+      const comboKey = [item1, item2].sort().join('+')
+      if (baseRecipePatterns.has(comboKey)) {
+        console.log(`⏭ Пропускаем комбинацию ${item1}+${item2} - есть в базовых рецептах`)
+        continue
+      }
       
       if (def1.rarity === def2.rarity && def1.type === def2.type && 
           itemCounts.get(item1) >= 1 && itemCounts.get(item2) >= 1) {
@@ -261,21 +369,32 @@ for (let i = 0; i < 4; i++) {
   cell.style.textOverflow = "ellipsis"
   cell.style.whiteSpace = "nowrap"
   cell.style.cursor = "pointer"
-  cell.dataset.item = null
+  // Не устанавливаем dataset.item, оставляем его undefined
   cell.dataset.gridIndex = String(i)
   
   // Разрешаем "бросать" предметы в ячейку
   cell.addEventListener('dragenter', (e) => {
     e.preventDefault()
     e.stopPropagation()
-    cell.style.border = "2px solid yellow"
-    cell.style.background = "#333"
+    // Проверяем, что это перетаскивание из инвентаря
+    const types = e.dataTransfer.types
+    if (types && types.includes('text/plain')) {
+      cell.style.border = "2px solid yellow"
+      cell.style.background = "#333"
+    }
   })
   
   cell.addEventListener('dragover', (e) => {
     e.preventDefault()
     e.stopPropagation()
-    e.dataTransfer.dropEffect = 'move'
+    const types = e.dataTransfer.types
+    if (types && types.includes('text/plain')) {
+      e.dataTransfer.dropEffect = 'move'
+      cell.style.border = "2px solid yellow"
+      cell.style.background = "#333"
+    } else {
+      e.dataTransfer.dropEffect = 'none'
+    }
   })
   
   cell.addEventListener('dragleave', (e) => {
@@ -296,6 +415,15 @@ for (let i = 0; i < 4; i++) {
   cell.addEventListener('drop', (e) => {
     e.preventDefault()
     e.stopPropagation()
+    
+    // Возвращаем нормальный цвет
+    if (cell.dataset.item) {
+      const itemDef = getItemDefinition(cell.dataset.item)
+      const rarityColor = getRarityColor(itemDef.rarity)
+      cell.style.border = `2px solid ${rarityColor}`
+    } else {
+      cell.style.border = "2px solid gray"
+    }
     cell.style.background = "#111"
     
     try {
@@ -306,7 +434,7 @@ for (let i = 0; i < 4; i++) {
       }
       
       const data = JSON.parse(dataStr)
-      console.log('Получены данные:', data)
+      console.log('Получены данные при drop:', data)
       
       if (data && data.item && data.slotIndex !== undefined) {
         // Проверяем, есть ли предмет в инвентаре
@@ -322,6 +450,18 @@ for (let i = 0; i < 4; i++) {
           return
         }
         
+        // Если ячейка уже заполнена другим предметом, возвращаем старый предмет в инвентарь
+        if (cell.dataset.item && 
+            cell.dataset.item !== 'null' && 
+            cell.dataset.item !== '' && 
+            cell.dataset.item !== data.item.name) {
+          const oldItemName = cell.dataset.item
+          if (oldItemName && oldItemName !== 'null' && oldItemName !== '') {
+            addItem(oldItemName, 1)
+            console.log('Старый предмет возвращен в инвентарь:', oldItemName)
+          }
+        }
+        
         // Уменьшаем количество в инвентаре на 1
         if (removeItem(data.slotIndex, 1)) {
           // Добавляем предмет в ячейку крафта
@@ -333,33 +473,49 @@ for (let i = 0; i < 4; i++) {
           const rarityColor = getRarityColor(itemDef.rarity)
           cell.style.border = `2px solid ${rarityColor}`
           
-          updateCrafting()
-          console.log('Предмет добавлен в ячейку:', data.item.name)
+          console.log(`✅ Предмет добавлен в ячейку крафтинга: ${data.item.name}, dataset.item = ${cell.dataset.item}`)
+          
+          // Небольшая задержка перед обновлением, чтобы убедиться что dataset обновился
+          setTimeout(() => {
+            updateCrafting()
+          }, 0)
         } else {
           console.warn('Не удалось удалить предмет из инвентаря')
         }
+      } else {
+        console.warn('Некорректные данные при drop:', data)
       }
     } catch (err) {
-      console.warn('Ошибка при перетаскивании:', err)
+      console.error('Ошибка при перетаскивании:', err)
     }
   })
   
-  // Обработчик клика для добавления предмета из инвентаря (резервный способ)
-  cell.addEventListener('click', () => {
+  // Обработчик клика для добавления/удаления предмета из инвентаря
+  cell.addEventListener('click', (e) => {
+    // Предотвращаем конфликт с drag событиями
+    e.stopPropagation()
+    
     const selected = getSelectedItem()
-    if (selected) {
-      // Проверяем, есть ли предмет в инвентаре
-      if (selected.count <= 0) {
-        console.warn('Предмет закончился в инвентаре')
-        return
+    
+    // Если ячейка уже заполнена, возвращаем предмет в инвентарь
+    if (cell.dataset.item && cell.dataset.item !== 'null' && cell.dataset.item !== '') {
+      const itemName = cell.dataset.item
+      // Проверяем, что itemName валидный перед добавлением
+      if (itemName && itemName !== 'null' && itemName !== '') {
+        addItem(itemName, 1)
+        // Удаляем data-атрибут вместо установки null
+        delete cell.dataset.item
+        cell.textContent = ""
+        cell.style.border = "2px solid gray"
+        cell.style.background = "#111"
+        updateCrafting()
+        console.log('Предмет возвращен в инвентарь:', itemName)
       }
-      
-      // Если ячейка уже заполнена тем же предметом, не делаем ничего
-      if (cell.dataset.item === selected.name) {
-        return
-      }
-      
-      // Уменьшаем количество в инвентаре на 1
+      return
+    }
+    
+    // Если ячейка пустая и есть выбранный предмет, добавляем его
+    if (selected && selected.name && selected.count > 0) {
       const slotIndex = getSelectedSlot()
       if (removeItem(slotIndex, 1)) {
         cell.dataset.item = selected.name
@@ -369,18 +525,19 @@ for (let i = 0; i < 4; i++) {
         const itemDef = getItemDefinition(selected.name)
         const rarityColor = getRarityColor(itemDef.rarity)
         cell.style.border = `2px solid ${rarityColor}`
+        cell.style.background = "#111"
         
-        updateCrafting()
+        console.log(`✅ Предмет добавлен в ячейку: ${selected.name}, dataset.item = ${cell.dataset.item}`)
+        
+        // Небольшая задержка перед обновлением, чтобы убедиться что dataset обновился
+        setTimeout(() => {
+          updateCrafting()
+        }, 0)
+      } else {
+        console.warn('Не удалось добавить предмет - возможно инвентарь полон или предмет закончился')
       }
-    } else if (cell.dataset.item) {
-      // Если кликнули по заполненной ячейке, возвращаем предмет в инвентарь
-      const itemName = cell.dataset.item
-      addItem(itemName, 1)
-      cell.dataset.item = null
-      cell.textContent = ""
-      cell.style.border = "2px solid gray" // Возвращаем стандартный цвет
-      updateCrafting()
     }
+    // Если ячейка пустая и нет выбранного предмета - ничего не делаем
   })
   
   craftDiv.appendChild(cell)
@@ -411,10 +568,34 @@ craftDiv.appendChild(resultSlot)
 
 // === ПОЛУЧЕНИЕ ПАТТЕРНА ИЗ 2x2 ===
 function getGridPattern() {
-  return [
-    [grid[0].dataset.item || null, grid[1].dataset.item || null],
-    [grid[2].dataset.item || null, grid[3].dataset.item || null]
+  // Функция для нормализации значения из dataset
+  const normalizeItem = (cell) => {
+    // Проверяем наличие свойства item в dataset
+    if (!cell || !('item' in cell.dataset)) {
+      return null
+    }
+    const item = cell.dataset.item
+    if (!item || item === 'null' || item === '' || item === 'undefined') {
+      return null
+    }
+    return item
+  }
+  
+  const pattern = [
+    [normalizeItem(grid[0]), normalizeItem(grid[1])],
+    [normalizeItem(grid[2]), normalizeItem(grid[3])]
   ]
+  
+  // Отладочный вывод для диагностики
+  console.log('📋 getGridPattern вызван. Ячейки:', {
+    0: grid[0].dataset.item || 'undefined',
+    1: grid[1].dataset.item || 'undefined',
+    2: grid[2].dataset.item || 'undefined',
+    3: grid[3].dataset.item || 'undefined'
+  })
+  console.log('📋 Нормализованный паттерн:', pattern)
+  
+  return pattern
 }
 
 
@@ -425,28 +606,124 @@ function matchRecipe() {
   // Отладочный вывод
   console.log('🔍 Проверка рецепта. Паттерн:', pattern)
 
-  for (const rec of recipes) {
-    let ok = true
+  // Собираем все не-null предметы из паттерна
+  const gridItems = []
+  for (let y = 0; y < 2; y++) {
+    for (let x = 0; x < 2; x++) {
+      if (pattern[y][x]) {
+        gridItems.push(pattern[y][x])
+      }
+    }
+  }
 
+  // Сначала проверяем базовые рецепты (они имеют приоритет)
+  for (const rec of baseRecipes) {
+    // Собираем все не-null предметы из рецепта
+    const recipeItems = []
+    for (let y = 0; y < 2; y++) {
+      for (let x = 0; x < 2; x++) {
+        if (rec.pattern[y][x]) {
+          recipeItems.push(rec.pattern[y][x])
+        }
+      }
+    }
+
+    // Проверяем точное совпадение паттерна (с учетом позиций)
+    let exactMatch = true
     for (let y = 0; y < 2; y++) {
       for (let x = 0; x < 2; x++) {
         const recipeItem = rec.pattern[y][x]
         const gridItem = pattern[y][x]
         if (recipeItem !== gridItem) {
-          ok = false
+          exactMatch = false
           break
         }
       }
-      if (!ok) break
+      if (!exactMatch) break
     }
 
-    if (ok) {
-      console.log('✅ Найден рецепт:', rec.result.name)
+    if (exactMatch) {
+      console.log('✅ Найден базовый рецепт (точное совпадение):', rec.result.name)
       return rec
+    }
+
+    // Если точного совпадения нет, проверяем совпадение по набору предметов (для рецептов смешивания)
+    // Это работает только если количество предметов совпадает
+    if (gridItems.length === recipeItems.length && gridItems.length >= 2) {
+      // Сортируем массивы для сравнения
+      const sortedGrid = [...gridItems].sort()
+      const sortedRecipe = [...recipeItems].sort()
+      
+      // Проверяем, что отсортированные массивы совпадают
+      let allMatch = true
+      for (let i = 0; i < sortedGrid.length; i++) {
+        if (sortedGrid[i] !== sortedRecipe[i]) {
+          allMatch = false
+          break
+        }
+      }
+
+      if (allMatch) {
+        console.log('✅ Найден базовый рецепт (совпадение по набору):', rec.result.name)
+        return rec
+      }
+    }
+  }
+  
+  // Затем проверяем динамически сгенерированные рецепты
+  for (const rec of generatedRecipes) {
+    // Собираем все не-null предметы из рецепта
+    const recipeItems = []
+    for (let y = 0; y < 2; y++) {
+      for (let x = 0; x < 2; x++) {
+        if (rec.pattern[y][x]) {
+          recipeItems.push(rec.pattern[y][x])
+        }
+      }
+    }
+
+    // Проверяем точное совпадение паттерна (с учетом позиций)
+    let exactMatch = true
+    for (let y = 0; y < 2; y++) {
+      for (let x = 0; x < 2; x++) {
+        const recipeItem = rec.pattern[y][x]
+        const gridItem = pattern[y][x]
+        if (recipeItem !== gridItem) {
+          exactMatch = false
+          break
+        }
+      }
+      if (!exactMatch) break
+    }
+
+    if (exactMatch) {
+      console.log('✅ Найден динамический рецепт (точное совпадение):', rec.result.name)
+      return rec
+    }
+
+    // Если точного совпадения нет, проверяем совпадение по набору предметов
+    if (gridItems.length === recipeItems.length && gridItems.length >= 2) {
+      // Сортируем массивы для сравнения
+      const sortedGrid = [...gridItems].sort()
+      const sortedRecipe = [...recipeItems].sort()
+      
+      // Проверяем, что отсортированные массивы совпадают
+      let allMatch = true
+      for (let i = 0; i < sortedGrid.length; i++) {
+        if (sortedGrid[i] !== sortedRecipe[i]) {
+          allMatch = false
+          break
+        }
+      }
+
+      if (allMatch) {
+        console.log('✅ Найден динамический рецепт (совпадение по набору):', rec.result.name)
+        return rec
+      }
     }
   }
 
-  console.log('❌ Рецепт не найден')
+  console.log('❌ Рецепт не найден. Предметы в сетке:', gridItems)
   return null
 }
 
@@ -491,15 +768,95 @@ function updateCrafting() {
 
 
 // === КЛИК ПО РЕЗУЛЬТАТУ — КРАФТ ===
-resultSlot.onclick = () => {
+resultSlot.onclick = async () => {
   if (!resultSlot.dataset.result) {
     console.log('❌ Нет результата для крафта')
     return
   }
 
   try {
-    const { name, count } = JSON.parse(resultSlot.dataset.result)
+    const resultData = JSON.parse(resultSlot.dataset.result)
+    const { name, count } = resultData
+    
+    // Находим рецепт для проверки наличия textureMix
+    const pattern = getGridPattern()
+    const recipe = matchRecipe()
+    
     console.log('🔨 Крафт предмета:', name, 'x', count)
+
+    // Если рецепт требует смешивания текстур, генерируем текстуру
+    if (recipe && recipe.textureMix) {
+      console.log('🎨 Генерация смешанной текстуры для:', name)
+      try {
+        const { mixTextures } = await import('../texture_runtime_loader.js')
+        const { texture1, texture2, ratio, resultName } = recipe.textureMix
+        
+        // Генерируем смешанную текстуру
+        const mixedTexture = await mixTextures(texture1, texture2, ratio, resultName)
+        
+        // Сохраняем текстуру в глобальном хранилище для использования в materials.js
+        // @ts-ignore
+        if (!window.generatedTextures) {
+          // @ts-ignore
+          window.generatedTextures = {}
+        }
+        // @ts-ignore
+        window.generatedTextures[resultName] = mixedTexture
+        
+        // Если это блок с несколькими сторонами (например, log), генерируем и top
+        if (resultName.includes('_side')) {
+          const topName = resultName.replace('_side', '_top')
+          // Для top используем log_top если доступен, иначе используем ту же текстуру
+          const topTexture1 = texture1.includes('_side') 
+            ? texture1.replace('_side', '_top') 
+            : (texture1.includes('log') ? 'log_top' : texture1)
+          
+          console.log(`🎨 Генерация top текстуры: ${topName} из ${topTexture1} + ${texture2}`)
+          
+          const topTexture = await mixTextures(
+            topTexture1,
+            texture2,
+            ratio,
+            topName
+          )
+          // @ts-ignore
+          window.generatedTextures[topName] = topTexture
+          
+          console.log(`✅ Top текстура сгенерирована: ${topName}`)
+          
+          // Отправляем событие для top текстуры ПЕРВОЙ (чтобы блок зарегистрировался когда придет side)
+          window.dispatchEvent(new CustomEvent('textureGenerated', {
+            detail: { textureName: topName, textureData: topTexture }
+          }))
+        }
+        
+        console.log('✅ Смешанная текстура сгенерирована:', resultName)
+        
+        // Отправляем событие для обновления материалов (side текстура) ПОСЛЕДНЕЙ
+        // Это важно, потому что блок регистрируется когда приходит последняя текстура
+        window.dispatchEvent(new CustomEvent('textureGenerated', {
+          detail: { textureName: resultName, textureData: mixedTexture }
+        }))
+        
+        // Ждем немного, чтобы блок успел зарегистрироваться
+        await new Promise(resolve => setTimeout(resolve, 200))
+        
+        // Проверяем, зарегистрирован ли блок
+        // @ts-ignore
+        const globalBlocksMap = window.blocksMap
+        const blockName = resultName.replace('_side', '').replace('_top', '')
+        if (globalBlocksMap && globalBlocksMap[blockName]) {
+          console.log(`✅ Блок ${blockName} успешно зарегистрирован (ID: ${globalBlocksMap[blockName]})`)
+        } else {
+          console.warn(`⚠ Блок ${blockName} не найден в blocksMap после генерации текстур`)
+          // @ts-ignore
+          console.log('Доступные блоки:', Object.keys(globalBlocksMap || {}))
+        }
+      } catch (err) {
+        console.error('❌ Ошибка при генерации смешанной текстуры:', err)
+        // Продолжаем крафт даже если не удалось сгенерировать текстуру
+      }
+    }
 
     // добавляем в инвентарь
     const added = addItem(name, count)
@@ -510,7 +867,8 @@ resultSlot.onclick = () => {
 
     // очищаем сетку
     grid.forEach(c => {
-      c.dataset.item = null
+      // Удаляем data-атрибут вместо установки null (чтобы избежать строки "null")
+      delete c.dataset.item
       c.textContent = ""
       c.style.border = "2px solid gray"
     })
