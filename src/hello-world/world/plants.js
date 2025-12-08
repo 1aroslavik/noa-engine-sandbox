@@ -10,15 +10,24 @@ function rand(a, b) {
     return a + Math.floor(Math.random() * (b - a + 1));
 }
 
-//
 // ===============================================
-// 🍄 ГИГАНТСКИЙ ГРИБ
+// 🍄 ГИГАНТСКИЙ ГРИБ (красный или коричневый)
 // ===============================================
 export function drawMushroom(noa, blocks, x, z) {
-    const STEM = blocks["mushroom_stem"];
-    const CAP  = blocks["mushroom_cap"];
 
-    if (!STEM || !CAP) return;
+    // ножка
+    const STEM = blocks["mushroom_leg"];
+
+    // случайный выбор шляпы
+    const caps = [
+        blocks["red_mushroom_top"],
+        blocks["brown_mashroom_top"]
+    ].filter(Boolean);
+
+    if (!STEM || caps.length === 0) return;
+
+    // выбираем случайный цвет шляпы
+    const CAP = caps[Math.floor(Math.random() * caps.length)];
 
     const y = getHeightAt(x, z);
     const height = rand(6, 10);
@@ -49,7 +58,7 @@ export function drawMushroom(noa, blocks, x, z) {
         }
     }
 
-    // верхняя часть
+    // верхняя точка
     B(noa, CAP, x, capY + 2, z);
 }
 
@@ -58,7 +67,8 @@ export function drawMushroom(noa, blocks, x, z) {
 // 🌵 КАКТУС (Saguaro style)
 // ===============================================
 export function drawCactus(noa, blocks, x, z) {
-    const CACTUS = blocks["cactus"] || blocks["sand"]; // временная текстура
+const CACTUS = blocks["cactus"];
+if (!CACTUS) return; // если вдруг нет — выходим
     const y = getHeightAt(x, z);
 
     const height = rand(6, 12);
@@ -192,7 +202,7 @@ export function generatePlantsInChunk(noa, ids, x, y, z) {
     // ================================
     // 🍄 ГРИБЫ — МОГУТ БЫТЬ ВЕЗДЕ
     // ================================
-    if (Math.random() < 0.05) {
+    if (Math.random() < 1) {
         drawMushroom(noa, blocks, wx, wz);
     }
 

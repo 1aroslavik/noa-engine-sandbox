@@ -61,7 +61,10 @@ def generate_all():
         res["grass_side"] = mix_vertical(res["grass_top"], res["dirt"])
     if "snow_top" in res and "dirt" in res:
         res["snow_transition_side"] = mix_vertical(res["snow_top"], res["dirt"])
-
+    if "grass_dry_top" in res and "dirt" in res:
+        res["grass_dry_side"] = mix_vertical(res["grass_dry_top"], res["dirt"])
+    if "tundra_grass_top" in res and "dirt" in res:
+        res["tundra_grass_side"] = mix_vertical(res["tundra_grass_top"], res["dirt"])
     return res
 
 
