@@ -16,7 +16,7 @@ META = "metadata.json"
 
 IMG = 32
 Z_DIM = 64
-EPOCHS = 1000
+EPOCHS = 3000
 LR = 1e-3
 BATCH = 32
 

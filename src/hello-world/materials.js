@@ -86,26 +86,30 @@ export async function initMaterialsAndBlocks(noa) {
     // ======================
     // 3. Блоки
     // ======================
-
-    makeSimple("dirt")
-    makeSimple("stone")
     makeSimple("andesite")
+    makeSimple("boards_wood")
+    makeSimple("brown_mashroom_top")
+    makeSimple("cactus")
+    makeSimple("desert_rock")
+    makeSimple("dirt")
     makeSimple("granite")
     makeSimple("gravel")
-
-    makeSimple("sand")
-    makeSimple("red_sand")
-    makeSimple("desert_rock")
-
-    makeSimple("snow_top")
-    makeSimple("snow_side")
     makeSimple("ice")
+    makeSimple("leaves_oak")
+    makeSimple("leaves_pine")
+    makeSimple("leaves_savanna")
+    makeSimple("mushroom_leg")
+    makeSimple("red_mushroom_top")
+    makeSimple("red_sand")
+    makeSimple("sand")
+    makeSimple("snow_top")
+    makeSimple("stone")
+    makeSimple("tundra_grass_top")
+    makeSimple("snow_side")
 
     make3("grass", "grass_top", "dirt", "grass_side")
     make3("grass_dry", "grass_dry_top", "dirt", "grass_dry_side")
     make3("tundra_grass", "tundra_grass_top", "dirt", "tundra_grass_side")
-
-    // ❄ ПЕРЕХОД СНЕГ → ЗЕМЛЯ (ТОЖЕ КАК ТРАВА)
     make3("snow", "snow_top", "dirt", "snow_transition_side")
 // ❄ Обычный снеговый блок: все стороны snow_top
 if (materials["snow_top"]) {
@@ -114,6 +118,33 @@ if (materials["snow_top"]) {
             materials["snow_top"], // top
             materials["snow_top"], // bottom
             materials["snow_top"]  // sides
+        ]
+    })
+}
+if (materials["grass_top"]) {
+    blocks["grass_block"] = noa.registry.registerBlock(blockIdCounter++, {
+        material: [
+            materials["grass_top"], // top
+            materials["grass_top"], // bottom
+            materials["grass_top"]  // sides
+        ]
+    })
+}
+if (materials["tundra_grass_top"]) {
+    blocks["tundra_grass_block"] = noa.registry.registerBlock(blockIdCounter++, {
+        material: [
+            materials["tundra_grass_top"], // top
+            materials["tundra_grass_top"], // bottom
+            materials["tundra_grass_top"]  // sides
+        ]
+    })
+}
+if (materials["grass_dry_top"]) {
+    blocks["grass_dry_block"] = noa.registry.registerBlock(blockIdCounter++, {
+        material: [
+            materials["grass_dry_top"], // top
+            materials["grass_dry_top"], // bottom
+            materials["grass_dry_top"]  // sides
         ]
     })
 }
@@ -129,9 +160,7 @@ if (materials["snow_top"]) {
         })
     }
 
-    makeTransparent("leaves_oak")
-    makeTransparent("leaves_pine")
-    makeTransparent("leaves_savanna")
+   
 
     // ======================
     // ДИНАМИЧЕСКИ СОЗДАННЫЕ БЛОКИ (из крафтинга)
@@ -200,22 +229,22 @@ if (materials["snow_top"]) {
     console.log("✔ Материалы:", Object.keys(materials))
     console.log("✔ Блоки:", Object.keys(blocks))
     // ======================
-// 🍄 ГРИБЫ (временный вариант: текстура песка)
-// ======================
-if (materials["sand"]) {
+    // 🍄 ГРИБЫ
+    // ======================
+    if (materials["mashroom_leg"] && materials["red_mashroom_top"]) {
 
-    // Ножка гриба — песочная текстура
-    blocks["mushroom_stem"] = noa.registry.registerBlock(blockIdCounter++, {
-        material: materials["sand"]
-    })
+        // Ножка гриба — своя текстура mashroom_leg
+        blocks["mushroom_stem"] = noa.registry.registerBlock(blockIdCounter++, {
+            material: materials["mashroom_leg"]
+        })
 
-    // Шляпа гриба — тоже песок (временно)
-    blocks["mushroom_cap"] = noa.registry.registerBlock(blockIdCounter++, {
-        material: materials["sand"]
-    })
+        // Шляпа гриба — красная шляпка red_mashroom_top
+        blocks["mushroom_cap"] = noa.registry.registerBlock(blockIdCounter++, {
+            material: materials["red_mashroom_top"]
+        })
 
-    console.log("🍄 Грибные блоки зарегистрированы (временная текстура: sand)")
-}
+        console.log("🍄 Грибные блоки зарегистрированы (ножка: mashroom_leg, шляпа: red_mashroom_top)")
+    }
 
     // Слушаем события генерации новых текстур
     window.addEventListener('textureGenerated', async (event) => {

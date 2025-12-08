@@ -33,6 +33,11 @@ CLASS_MAP = {
     "sand": 19,
     "red_sand": 20,
     "desert_rock": 21,
+    "boards_wood": 22,
+    "brown_mashroom_top": 23,
+    "cactus":24,
+    "mashroom_leg":25,
+    "red_mashroom_top":26,
 }
 
 # Количество классов ОПРЕДЕЛЯЕТСЯ АВТОМАТИЧЕСКИ
