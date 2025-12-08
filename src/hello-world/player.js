@@ -1,5 +1,6 @@
 // player.js
 import { noa } from "./engine.js"
+import { removeItem } from "./ui/inventory.js"
 
 // Система здоровья игрока
 let playerHealth = 100
@@ -74,6 +75,110 @@ function updateHealthUI() {
 // Инициализируем UI здоровья при загрузке
 export function initHealthUI() {
     updateHealthUI()
+    initHealSlot()
+}
+
+// Инициализация слота для восстановления здоровья
+function initHealSlot() {
+    // Ждем, пока элемент будет создан в crafting.js
+    // Используем небольшую задержку, чтобы убедиться, что crafting.js уже загружен
+    setTimeout(() => {
+        const healSlot = document.getElementById('heal-slot')
+        if (!healSlot) {
+            console.warn('Heal slot not found - crafting.js may not be loaded yet')
+            return
+        }
+        setupHealSlot(healSlot)
+    }, 100)
+}
+
+function setupHealSlot(healSlot) {
+
+    // Обработчики для drag and drop
+    healSlot.addEventListener('dragenter', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const types = e.dataTransfer.types
+        if (types && types.includes('text/plain')) {
+            healSlot.classList.add('drag-over')
+        }
+    })
+
+    healSlot.addEventListener('dragover', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const types = e.dataTransfer.types
+        if (types && types.includes('text/plain')) {
+            e.dataTransfer.dropEffect = 'move'
+            healSlot.classList.add('drag-over')
+        } else {
+            e.dataTransfer.dropEffect = 'none'
+        }
+    })
+
+    healSlot.addEventListener('dragleave', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        healSlot.classList.remove('drag-over')
+    })
+
+    healSlot.addEventListener('drop', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        healSlot.classList.remove('drag-over')
+
+        try {
+            const dataStr = e.dataTransfer.getData('text/plain')
+            if (!dataStr) {
+                console.warn('No data for drag and drop')
+                return
+            }
+
+            const data = JSON.parse(dataStr)
+            if (!data || !data.item || data.slotIndex === undefined) {
+                console.warn('Invalid drag data:', data)
+                return
+            }
+
+            // Проверяем, что это мясо
+            const itemName = data.item.name
+            const isMeat = itemName === 'meat' || itemName === 'pig_meat' || 
+                          itemName === 'cow_meat' || itemName === 'bear_meat'
+
+            if (!isMeat) {
+                console.log('❌ Only meat can be used to restore health')
+                return
+            }
+
+            const currentHealth = getPlayerHealth()
+            const maxHealth = getPlayerMaxHealth()
+
+            // Используем мясо только если здоровье не полное
+            if (currentHealth < maxHealth) {
+                // Определяем количество восстановления здоровья в зависимости от типа мяса
+                let healAmount = 10 // По умолчанию
+                if (itemName === 'pig_meat') {
+                    healAmount = 15
+                } else if (itemName === 'cow_meat') {
+                    healAmount = 20
+                } else if (itemName === 'bear_meat') {
+                    healAmount = 30
+                }
+
+                // Удаляем один предмет из инвентаря
+                if (removeItem(data.slotIndex, 1)) {
+                    healPlayer(healAmount)
+                    console.log(`🍖 Used meat: ${itemName}, restored ${healAmount} health`)
+                } else {
+                    console.warn('Failed to remove item from inventory')
+                }
+            } else {
+                console.log('💚 Health is already full!')
+            }
+        } catch (err) {
+            console.error('Error during drag and drop:', err)
+        }
+    })
 }
 
 // ОДНОМУ ПЕРЕМЕННОМУ — grassID — нужно передать его сюда

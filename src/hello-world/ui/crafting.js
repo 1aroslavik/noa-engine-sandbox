@@ -407,6 +407,13 @@ document.body.appendChild(craftDiv)
 
 
 // === CRAFT GRID 2x2 ===
+const gridContainer = document.createElement("div")
+gridContainer.style.display = "flex"
+gridContainer.style.flexWrap = "wrap"
+gridContainer.style.width = "108px" // 2 ячейки по 48px + 12px gap
+gridContainer.style.gap = "4px"
+craftDiv.appendChild(gridContainer)
+
 export const grid = []
 for (let i = 0; i < 4; i++) {
   const cell = document.createElement("div")
@@ -597,7 +604,7 @@ for (let i = 0; i < 4; i++) {
     // Если ячейка пустая и нет выбранного предмета - ничего не делаем
   })
   
-  craftDiv.appendChild(cell)
+  gridContainer.appendChild(cell)
   grid.push(cell)
 }
 
@@ -620,6 +627,47 @@ resultSlot.style.overflow = "hidden"
 resultSlot.style.textOverflow = "ellipsis"
 resultSlot.style.whiteSpace = "nowrap"
 craftDiv.appendChild(resultSlot)
+
+// === СЛОТ ДЛЯ ВОССТАНОВЛЕНИЯ ЗДОРОВЬЯ ===
+export const healSlot = document.createElement("div")
+healSlot.id = "heal-slot"
+healSlot.style.width = "48px"
+healSlot.style.height = "48px"
+healSlot.style.border = "2px dashed #666"
+healSlot.style.background = "rgba(100, 0, 0, 0.3)"
+healSlot.style.margin = "8px auto 0"
+healSlot.style.display = "flex"
+healSlot.style.alignItems = "center"
+healSlot.style.justifyContent = "center"
+healSlot.style.color = "#fff"
+healSlot.style.fontSize = "20px"
+healSlot.style.fontFamily = "'Courier New', 'Monaco', monospace"
+healSlot.style.cursor = "pointer"
+healSlot.style.transition = "all 0.2s"
+healSlot.title = "Drag meat here to restore health"
+healSlot.innerHTML = "❤️"
+craftDiv.appendChild(healSlot)
+
+// Метка для слота восстановления здоровья
+const healSlotLabel = document.createElement("div")
+healSlotLabel.id = "heal-slot-label"
+healSlotLabel.style.color = "rgba(255, 255, 255, 0.7)"
+healSlotLabel.style.fontSize = "9px"
+healSlotLabel.style.textAlign = "center"
+healSlotLabel.style.marginTop = "2px"
+healSlotLabel.textContent = "Drop meat"
+craftDiv.appendChild(healSlotLabel)
+
+// === ПОДСКАЗКА О ЗАКРЫТИИ ===
+const closeHint = document.createElement("div")
+closeHint.style.color = "rgba(255, 255, 255, 0.5)"
+closeHint.style.fontSize = "10px"
+closeHint.style.textAlign = "center"
+closeHint.style.marginTop = "8px"
+closeHint.style.paddingTop = "8px"
+closeHint.style.borderTop = "1px solid #444"
+closeHint.textContent = "Press E or ESC to close"
+craftDiv.appendChild(closeHint)
 
 // === СПИСОК РЕЦЕПТОВ ===
 export const recipesListDiv = document.createElement("div")
@@ -1124,9 +1172,35 @@ resultSlot.onclick = async () => {
 }
 
 
+// === ФУНКЦИЯ ЗАКРЫТИЯ ОКНА КРАФТА ===
+function closeCraftingWindow() {
+  // @ts-ignore
+  const noa = window.noa
+  craftDiv.style.display = "none"
+  console.log("❌ Окно крафта закрыто")
+  // Скрываем курсор - pointer lock будет активирован при клике на canvas
+  // (обработчик клика уже есть в index.js)
+  if (noa && noa.container && noa.container.canvas) {
+    noa.container.canvas.style.cursor = "none"
+  }
+}
+
 // === ОТКРЫТИЕ/ЗАКРЫТИЕ ИНТЕРФЕЙСА ===
 // Используем capture phase, чтобы перехватить E до других обработчиков
 document.addEventListener("keydown", e => {
+  // @ts-ignore
+  const noa = window.noa
+  const isOpen = craftDiv.style.display === "flex"
+  
+  // Закрываем крафт по ESC (только если окно открыто)
+  if (e.code === "Escape" && isOpen) {
+    e.preventDefault()
+    e.stopPropagation()
+    e.stopImmediatePropagation()
+    closeCraftingWindow()
+    return
+  }
+  
   // Открываем крафт по E
   if (e.code === "KeyE" && !e.shiftKey && !e.ctrlKey && !e.altKey) {
     e.preventDefault()
@@ -1135,8 +1209,6 @@ document.addEventListener("keydown", e => {
     
     console.log("🔧 E нажата - открываем/закрываем крафт")
     
-    // @ts-ignore
-    const noa = window.noa
     const isOpening = craftDiv.style.display === "none" || craftDiv.style.display === ""
     
     if (isOpening) {
@@ -1155,14 +1227,7 @@ document.addEventListener("keydown", e => {
         noa.container.canvas.style.cursor = "default"
       }
     } else {
-      // Закрываем окно крафта
-      craftDiv.style.display = "none"
-      console.log("❌ Окно крафта закрыто")
-      // Включаем pointer lock обратно для управления камерой
-      if (noa && noa.container && noa.container.canvas) {
-        noa.container.canvas.requestPointerLock()
-        noa.container.canvas.style.cursor = "none"
-      }
+      closeCraftingWindow()
     }
   }
 }, true) // Используем capture phase для раннего перехвата

@@ -917,7 +917,7 @@ function registerTickHandler() {
                         const damage = bear.size === 'small' ? 5 : 10
                         damagePlayer(damage)
                         bear.attackCooldown = 60 // Кулдаун атаки
-                        console.log(`🐻 Медведь атаковал игрока! Урон: ${damage}, Расстояние: ${currentDistance.toFixed(2)}`)
+                        console.log(`🐻 Bear attacked player! Damage: ${damage}, Distance: ${currentDistance.toFixed(2)}`)
                     }
                 } else {
                     // Игрок не в зоне атаки - сбрасываем кулдаун для немедленной атаки при приближении
@@ -1976,57 +1976,57 @@ function registerTickHandler() {
     })
 }
 
-// Регистрируем обработчик после небольшой задержки
+// Register handler after a short delay
 setTimeout(registerTickHandler, 100)
 
 
 // ------------------------------------------------------------
-// Нанесение урона свинье (вызывается из обработчика fire)
+// Damage pig (called from fire handler)
 // ------------------------------------------------------------
 export function damagePig(noa, pig) {
     if (!pig || pig.health <= 0) return
     
     pig.health -= 1
-    console.log(`🐷 Свинья получила урон! Здоровье: ${pig.health}/${pig.maxHealth}`)
+    console.log(`🐷 Pig took damage! Health: ${pig.health}/${pig.maxHealth}`)
     
-    // Если здоровье достигло 0, удаляем свинью и добавляем мясо в инвентарь
+    // If health reached 0, remove pig and add meat to inventory
     if (pig.health <= 0) {
-        console.log(`🐷 Свинья исчезла!`)
+        console.log(`🐷 Pig disappeared!`)
         
-        // Добавляем мясо свиньи в инвентарь
-        // Количество мяса зависит от размера свиньи
+        // Add pig meat to inventory
+        // Meat amount depends on pig size
         const meatCount = pig.size === 'small' ? 1 : 2
         addItem('pig_meat', meatCount)
-        console.log(`🥩 Получено мяса свиньи: ${meatCount}`)
+        console.log(`🥩 Received pig meat: ${meatCount}`)
         
-        // Удаляем из массива
+        // Remove from array
         const index = pigs.indexOf(pig)
         if (index > -1) {
             pigs.splice(index, 1)
         }
         
-        // Удаляем сущность из noa
+        // Remove entity from noa
         noa.entities.deleteEntity(pig.id)
     }
 }
 
 
 // ------------------------------------------------------------
-// Нанесение урона корове (вызывается из обработчика fire)
+// Damage cow (called from fire handler)
 // ------------------------------------------------------------
 export function damageCow(noa, cow) {
     if (!cow || cow.health <= 0) return
     
     cow.health -= 1
-    console.log(`🐄 Корова получила урон! Здоровье: ${cow.health}/${cow.maxHealth}`)
+    console.log(`🐄 Cow took damage! Health: ${cow.health}/${cow.maxHealth}`)
     
         if (cow.health <= 0) {
-        console.log(`🐄 Корова исчезла!`)
+        console.log(`🐄 Cow disappeared!`)
         
-        // Добавляем мясо коровы в инвентарь (количество зависит от размера)
+        // Add cow meat to inventory (amount depends on size)
         const meatCount = cow.size === 'small' ? 2 : 3
         addItem('cow_meat', meatCount)
-        console.log(`🥩 Получено мяса коровы: ${meatCount}`)
+        console.log(`🥩 Received cow meat: ${meatCount}`)
         
         const index = cows.indexOf(cow)
         if (index > -1) {
@@ -2039,22 +2039,22 @@ export function damageCow(noa, cow) {
 
 
 // ------------------------------------------------------------
-// Нанесение урона медведю (вызывается из обработчика fire)
+// Damage bear (called from fire handler)
 // ------------------------------------------------------------
 export function damageBear(noa, bear) {
     if (!bear || bear.health <= 0) return
     
     bear.health -= 1
-    console.log(`🐻 Медведь получил урон! Здоровье: ${bear.health}/${bear.maxHealth}`)
+    console.log(`🐻 Bear took damage! Health: ${bear.health}/${bear.maxHealth}`)
     
     if (bear.health <= 0) {
-        console.log(`🐻 Медведь исчез!`)
+        console.log(`🐻 Bear disappeared!`)
         
-        // Добавляем мясо медведя в инвентарь (больше всего мяса)
-        // Количество мяса зависит от размера: маленькие - 4-5, обычные - 6-8
+        // Add bear meat to inventory (most meat)
+        // Meat amount depends on size: small - 4-5, normal - 6-8
         const meatCount = bear.size === 'small' ? (4 + Math.floor(Math.random() * 2)) : (6 + Math.floor(Math.random() * 3))
         addItem('bear_meat', meatCount)
-        console.log(`🥩 Получено мяса медведя: ${meatCount}`)
+        console.log(`🥩 Received bear meat: ${meatCount}`)
         
         const index = bears.indexOf(bear)
         if (index > -1) {
@@ -2067,7 +2067,7 @@ export function damageBear(noa, bear) {
 
 
 // ------------------------------------------------------------
-// Генерация животных в чанке
+// Generate animals in chunk
 // ------------------------------------------------------------
 export function generateAnimalsInChunk(noa, ids, x0, y0, z0) {
     const scene = noa.rendering.getScene()
