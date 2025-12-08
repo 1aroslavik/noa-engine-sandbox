@@ -216,7 +216,7 @@ export function generatePlantsInChunk(noa, ids, x, y, z) {
     // ================================
     // 🌵 КАКТУСЫ — ТОЛЬКО ПУСТЫНЯ
     // ================================
-    if (biome === "desert" && Math.random() < 0.06) {
+    if (biome === "desert" && Math.random() < 0.1) {
         drawCactus(noa, blocks, wx, wz);
     }
 

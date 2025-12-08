@@ -21,7 +21,6 @@ export function setupPlayer(grassID) {
     }
 
     // убедимся, что игрок стоит на нормальной высоте
-    noa.entities.setPosition(player, [0.5, 20, 0.5])
 
 
     // ================================
