@@ -10,6 +10,7 @@ import { getPigs, damagePig, getCows, damageCow, getBears, damageBear } from "./
 import "./ui/inventory.js" // Подключаем инвентарь и крафтинг
 import { addItem } from "./ui/inventory.js"
 import { getItemDefinition } from "./ui/items.js"
+import { initHealthUI } from "./player.js"
 
 // =======================
 //    СОЗДАЁМ ДВИЖОК
@@ -101,6 +102,9 @@ async function start() {
 
     // Проверяем что мир сгенерировался и ждем если нужно
     await waitForWorldGeneration()
+
+    // Инициализируем UI здоровья
+    initHealthUI()
 
     // Скрываем окно загрузки после полной инициализации
     hideLoadingScreen()

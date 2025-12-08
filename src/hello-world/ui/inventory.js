@@ -2,6 +2,7 @@
 import { noa } from '../engine.js'
 import './crafting.js'
 import { getItemDefinition, getRarityColor, getShortName } from './items.js'
+import { healPlayer, getPlayerHealth, getPlayerMaxHealth } from '../player.js'
 
 const HOTBAR_SLOTS = 9
 export const inventory = new Array(HOTBAR_SLOTS).fill(null)
@@ -113,6 +114,39 @@ function drawInventory() {
     slot.addEventListener('click', () => {
       selectedSlot = i
       drawInventory()
+    })
+    
+    // Обработчик двойного клика для использования мяса
+    slot.addEventListener('dblclick', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      
+      if (item && (item.name === 'meat' || item.name === 'pig_meat' || item.name === 'cow_meat' || item.name === 'bear_meat')) {
+        const currentHealth = getPlayerHealth()
+        const maxHealth = getPlayerMaxHealth()
+        
+        // Используем мясо только если здоровье не полное
+        if (currentHealth < maxHealth) {
+          // Определяем количество восстановления здоровья в зависимости от типа мяса
+          let healAmount = 10 // По умолчанию
+          if (item.name === 'pig_meat') {
+            healAmount = 15
+          } else if (item.name === 'cow_meat') {
+            healAmount = 20
+          } else if (item.name === 'bear_meat') {
+            healAmount = 30
+          }
+          
+          healPlayer(healAmount)
+          
+          // Удаляем один предмет из инвентаря
+          removeItem(i, 1)
+          
+          console.log(`🍖 Использовано мясо: ${item.name}, восстановлено ${healAmount} здоровья`)
+        } else {
+          console.log('💚 Здоровье уже полное!')
+        }
+      }
     })
     container.appendChild(slot)
   }

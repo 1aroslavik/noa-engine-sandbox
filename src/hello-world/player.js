@@ -1,6 +1,81 @@
 // player.js
 import { noa } from "./engine.js"
 
+// Система здоровья игрока
+let playerHealth = 100
+let playerMaxHealth = 100
+let lastDamageTime = 0
+const DAMAGE_COOLDOWN = 500 // Кулдаун между атаками (мс)
+
+// Экспортируем функции для работы со здоровьем
+export function getPlayerHealth() {
+    return playerHealth
+}
+
+export function getPlayerMaxHealth() {
+    return playerMaxHealth
+}
+
+export function damagePlayer(amount) {
+    const currentTime = Date.now()
+    // Проверяем кулдаун, чтобы не получать урон слишком часто
+    if (currentTime - lastDamageTime < DAMAGE_COOLDOWN) {
+        return
+    }
+    
+    lastDamageTime = currentTime
+    playerHealth = Math.max(0, playerHealth - amount)
+    
+    // Обновляем UI здоровья
+    updateHealthUI()
+    
+    console.log(`💔 Игрок получил урон! Здоровье: ${playerHealth}/${playerMaxHealth}`)
+    
+    // Если здоровье упало до 0, можно добавить логику смерти
+    if (playerHealth <= 0) {
+        console.log("💀 Игрок умер!")
+        // Здесь можно добавить логику смерти (респавн, экран смерти и т.д.)
+    }
+}
+
+export function healPlayer(amount) {
+    playerHealth = Math.min(playerMaxHealth, playerHealth + amount)
+    
+    // Обновляем UI здоровья
+    updateHealthUI()
+    
+    console.log(`❤️ Игрок восстановил здоровье! Здоровье: ${playerHealth}/${playerMaxHealth}`)
+}
+
+// Функция для обновления UI здоровья
+function updateHealthUI() {
+    const healthBar = document.getElementById('health-bar')
+    const healthText = document.getElementById('health-text')
+    
+    if (healthBar) {
+        const percentage = (playerHealth / playerMaxHealth) * 100
+        healthBar.style.width = `${percentage}%`
+        
+        // Меняем цвет в зависимости от здоровья (пиксельные цвета)
+        if (percentage > 60) {
+            healthBar.style.backgroundColor = '#00FF00' // Яркий зеленый
+        } else if (percentage > 30) {
+            healthBar.style.backgroundColor = '#FFFF00' // Яркий желтый
+        } else {
+            healthBar.style.backgroundColor = '#FF0000' // Яркий красный
+        }
+    }
+    
+    if (healthText) {
+        healthText.textContent = `${Math.ceil(playerHealth)}/${playerMaxHealth}`
+    }
+}
+
+// Инициализируем UI здоровья при загрузке
+export function initHealthUI() {
+    updateHealthUI()
+}
+
 // ОДНОМУ ПЕРЕМЕННОМУ — grassID — нужно передать его сюда
 export function setupPlayer(grassID) {
 
