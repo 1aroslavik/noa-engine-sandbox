@@ -221,6 +221,31 @@ Results:
 - same trees  
 - reproducible CVAE texture classes  
 
+# 9. Crafting System
+
+A **2×2 grid recipe system** with **runtime texture mixing** via CVAE.
+
+## 9.1 Recipe Matching
+
+Base recipes (static, always available):
+- `log → planks (×4)`
+- `planks + planks → stick (×4)`
+- `dirt + log → wood`
+- `stone + log → brick` 
+- `dirt + stone → coal` 
+- `sand + log → glass`
+
+Pattern matching:
+1. Normalize item names: `dirt_plains, dirt_tundra → dirt`
+2. Check base recipes first (exact position or sorted item set)
+3. Dynamic recipe generation exists but is disabled
+
+## 9.2 Runtime Texture Mixing
+
+Recipes with `textureMix` trigger CVAE texture generation:
+
+For multi-sided blocks (`_side` + `_top`), both textures are generated and block registration waits for both.
+
 ---
 
 # 🏁 Summary
@@ -233,4 +258,6 @@ This system implements:
 ✔ procedural flora  
 ✔ generative animals  
 ✔ survival-style ecosystem  
+✔ crafting with runtime texture mixing 
+
 
