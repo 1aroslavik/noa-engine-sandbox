@@ -45,8 +45,8 @@ export default defineConfig(({ command, mode, ssrBuild }) => {
                 // safe to remove all these if you only have one entry point
                 input: {
                     index: resolve(__dirname, 'src/index.html'),
-                    test: resolve(__dirname, 'src/test/index.html'),
-                    stress: resolve(__dirname, 'src/stress/index.html'),
+                    // test: resolve(__dirname, 'src/test/index.html'),
+                    // stress: resolve(__dirname, 'src/stress/index.html'),
                     helloWorld: resolve(__dirname, 'src/hello-world/index.html'),
                 },
 

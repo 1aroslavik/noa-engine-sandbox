@@ -29,3 +29,9 @@ endif
 
 start:
 	npm start
+
+build-vae:
+	docker build --platform linux/amd64 -f src/hello-world/vae/Dockerfile -t nasturra/vae-server:latest .
+
+build-game:
+	docker build --platform linux/amd64 -f Dockerfile -t nasturra/game-server:latest .

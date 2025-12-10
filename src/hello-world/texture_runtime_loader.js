@@ -1,9 +1,19 @@
 // texture_runtime_loader.js
 
-export async function generateTextures() {
-    console.log("🔄 Запрос текстур с http://localhost:3001/generate")
+// Определяет базовый URL для запросов к серверу текстур
+function getTextureServerBaseUrl() {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('localhost')) {
+        return 'http://localhost:3001'
+    }
+    return '/texture-gen' // относительный путь для продакшена
+}
 
-    const res = await fetch("http://localhost:3001/generate")
+export async function generateTextures() {
+    const baseUrl = getTextureServerBaseUrl()
+    const url = `${baseUrl}/generate`
+    console.log(`🔄 Запрос текстур с ${url}`)
+
+    const res = await fetch(url)
 
     if (!res.ok) {
         throw new Error("❌ Ошибка ответа от сервера текстур: " + res.status)
@@ -27,7 +37,9 @@ export async function generateTextures() {
 export async function mixTextures(texture1, texture2, ratio = 0.5, resultName = null) {
     console.log(`🔄 Смешивание текстур: ${texture1} + ${texture2} (ratio: ${ratio})`)
 
-    const res = await fetch("http://localhost:3001/mix", {
+    const baseUrl = getTextureServerBaseUrl()
+    const url = `${baseUrl}/mix`
+    const res = await fetch(url, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"

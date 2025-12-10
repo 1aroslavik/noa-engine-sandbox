@@ -1,0 +1,32 @@
+services:
+  game-server:
+    image: nasturra/game-server:latest
+    container_name: game-server
+    restart: unless-stopped
+    networks:
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.game-server.rule=Host(`x1.md`)"
+      - "traefik.http.routers.game-server.entrypoints=web"
+      - "traefik.http.services.game-server.loadbalancer.server.port=8080"
+      - "traefik.docker.network=traefik-network"
+
+  vae-server:
+    image: nasturra/vae-server:latest
+    container_name: vae-server
+    restart: unless-stopped
+    networks:
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vae-server.rule=Host(`x1.md`) && PathPrefix(`/texture-gen`)"
+      - "traefik.http.routers.vae-server.entrypoints=web"
+      - "traefik.http.middlewares.vae-stripprefix.stripprefix.prefixes=/texture-gen"
+      - "traefik.http.routers.vae-server.middlewares=vae-stripprefix"
+      - "traefik.http.services.vae-server.loadbalancer.server.port=3001"
+      - "traefik.docker.network=traefik-network"
+
+networks:
+  traefik-network:
+    external: true
