@@ -1,0 +1,55 @@
+html, body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #1F1A31;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.scene {
+  transform-style: preserve-3d;
+  perspective: 20000px;
+}
+
+.plane {
+  font-size: 60px;
+  position: relative;
+  transform: rotateX(60deg) rotateZ(45deg);
+}
+
+.line {
+  position: absolute;
+  height: 0.4em;
+  width: calc(0.4em * 13);
+}
+
+.cube {
+  height: 0.4em;
+  width: 0.4em;
+  position: absolute;
+  transform-style: preserve-3d;
+}
+
+.cube__f {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin-top: -0.2em;
+  margin-left: -0.2em;
+  height: 0.4em;
+  width: 0.4em;
+  background: inherit;
+}
+
+.cube__f:nth-child(1) { transform: rotateY(0deg)   translateZ(0.2em); }
+.cube__f:nth-child(2) { transform: rotateY(90deg)  translateZ(0.2em); }
+.cube__f:nth-child(3) { transform: rotateX(90deg)  translateZ(0.2em); }
+
+@keyframes anim {
+  0%, 100% { transform: translateZ(0); }
+  50%      { transform: translateZ(0.2em); }
+}
