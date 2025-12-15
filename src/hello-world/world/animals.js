@@ -828,7 +828,7 @@ function registerTickHandler() {
             let distanceToPlayer = Infinity
             let isPlayerInAggroRange = false
             const AGGRO_RANGE = 10.0 // Зона агрессии - 10 блоков
-            const ATTACK_RANGE = 2.0 // Зона атаки - 2 блока
+            const ATTACK_RANGE = 8.0 // Зона атаки - 8 блоков (очень большая зона поражения)
             
             if (currentNoa.playerEntity) {
                 playerPos = currentNoa.entities.getPosition(currentNoa.playerEntity)
@@ -914,7 +914,7 @@ function registerTickHandler() {
                     
                     // Атакуем каждые 60 тиков (примерно раз в секунду)
                     if (bear.attackCooldown <= 0) {
-                        const damage = bear.size === 'small' ? 5 : 10
+                        const damage = bear.size === 'small' ? 15 : 25 // Увеличенный урон: маленькие - 15, обычные - 25
                         damagePlayer(damage)
                         bear.attackCooldown = 60 // Кулдаун атаки
                         console.log(`🐻 Bear attacked player! Damage: ${damage}, Distance: ${currentDistance.toFixed(2)}`)

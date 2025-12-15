@@ -22,11 +22,7 @@ export { getHeightAt } from "./height.js";
 
 import { createNoise2D } from "simplex-noise";
 import { generatePlantsInChunk } from "./plants.js";
-import { D } from "../../../docs/assets/babylon.39bd9ef3.js";
 // Пещерные шумы (оставляем твои)
-const caveNoiseA = createNoise2D(() => Math.random());
-const caveNoiseB = createNoise2D(() => Math.random());
-const ravineNoise = createNoise2D(() => Math.random());
 const iceSpikeNoise = createNoise2D(() => Math.random());
 
 function N2(fn, x, z, s) {
@@ -63,6 +59,12 @@ export function registerWorldGeneration(noa, ids) {
     const B = ids.blocks;
     const GRASS_PLANT = ids.grassID; 
 
+    // Проверяем что все необходимые блоки загружены
+    if (!B || typeof B !== 'object') {
+        console.error("❌ КРИТИЧЕСКАЯ ОШИБКА: ids.blocks не определен или не является объектом", { ids, blocks: B })
+        throw new Error("Blocks not loaded: ids.blocks is undefined or not an object")
+    }
+
 const ANDESITE = B["andesite"];
 const BOARDS_WOOD = B["boards_wood"];     // FIXED
 const GRANITE = B["granite"];
@@ -91,15 +93,71 @@ const GRASS_DRY = B["grass_dry"];                     // переход
 const GRASS_DRY_BLOCK = B["grass_dry_block"];         // полный блок
 
 const WATER = ids.waterID;
+
+    // Проверяем критически важные блоки
+    const criticalBlocks = { STONE, DIRT, GRASS, WATER }
+    const missingBlocks = Object.entries(criticalBlocks)
+        .filter(([name, value]) => value === undefined || value === null)
+        .map(([name]) => name)
     
+    if (missingBlocks.length > 0) {
+        console.error("❌ КРИТИЧЕСКАЯ ОШИБКА: Отсутствуют необходимые блоки:", missingBlocks)
+        console.error("📦 Доступные блоки:", Object.keys(B))
+        throw new Error(`Critical blocks missing: ${missingBlocks.join(", ")}`)
+    }
+
+    // Fallback значения для опциональных блоков
+    const warnedBlocks = new Set()
+    const safeGetBlock = (blockId, fallback = STONE) => {
+        if (blockId === undefined || blockId === null) {
+            // Логируем только первые несколько раз, чтобы не засорять консоль
+            const key = `${blockId}_${fallback}`
+            if (!warnedBlocks.has(key)) {
+                warnedBlocks.add(key)
+                console.warn(`⚠️ Блок не определен (${blockId}), используем fallback: ${fallback}`)
+            }
+            return fallback
+        }
+        return blockId
+    }
+    
+    // Проверяем что все основные блоки определены
+    const requiredBlocks = {
+        STONE, DIRT, GRASS, WATER,
+        SAND: safeGetBlock(SAND, STONE),
+        ICE: safeGetBlock(ICE, STONE),
+        SNOW: safeGetBlock(SNOW, STONE),
+        GRAVEL: safeGetBlock(GRAVEL, STONE)
+    }
+    
+    console.log("✅ Проверка блоков завершена, начинаем генерацию")
+    
+    // Проверяем что noa.world существует и имеет метод on
+    if (!noa.world || typeof noa.world.on !== 'function') {
+        console.error("❌ КРИТИЧЕСКАЯ ОШИБКА: noa.world.on не доступен!", { noa, world: noa.world })
+        throw new Error("noa.world.on is not available")
+    }
+    
+    console.log("🔧 Регистрируем обработчик worldDataNeeded...")
 
     noa.world.on("worldDataNeeded", (id, data, x, y, z) => {
-        console.log("GEN CALL", id, data.shape)
+        // Определяем, является ли это первым чанком (для логирования)
+        // Объявляем ДО try блока, чтобы переменная была доступна во всей функции
+        const isFirstChunk = y === 0 && (Math.abs(x) < 100 && Math.abs(z) < 100)
         
-        // Логируем только первые несколько чанков для отладки
-        if (y === 0 && (Math.abs(x) < 100 && Math.abs(z) < 100)) {
-            console.log(`🌍 Генерация чанка: x=${x}, y=${y}, z=${z}, id=${id}`)
-        }
+        try {
+            // Логируем ВСЕ вызовы для отладки проблемы в продакшене
+            console.log("🔵 GEN CALL - worldDataNeeded вызван!", { id, x, y, z, shape: data?.shape })
+            
+            if (isFirstChunk) {
+                console.log(`🌍 Генерация чанка: x=${x}, y=${y}, z=${z}, id=${id}, shape=${data?.shape}`)
+            }
+            
+            // Проверяем что data валидна
+            if (!data || !data.set || !data.shape) {
+                console.error("❌ Невалидные данные чанка:", { id, x, y, z, data })
+                throw new Error("Invalid chunk data")
+            }
 
         const SX = data.shape[0];
         const SY = data.shape[1];
@@ -116,9 +174,34 @@ const WATER = ids.waterID;
                 const wx = x + i;
                 const wz = z + k;
 
-                const biome = getBiome(wx, wz);
-                const height = getHeightAt(wx, wz);
-                const wLevel = getWaterLevel(wx, wz);
+                // Безопасное получение данных для генерации
+                let biome, height, wLevel
+                try {
+                    biome = getBiome(wx, wz);
+                    height = getHeightAt(wx, wz);
+                    wLevel = getWaterLevel(wx, wz);
+                    
+                    // Проверяем что значения валидны
+                    if (!Number.isFinite(height)) {
+                        console.error(`❌ Невалидная высота: ${height} для позиции (${wx}, ${wz})`)
+                        height = 50 // Fallback высота
+                    }
+                    if (wLevel !== -999 && !Number.isFinite(wLevel)) {
+                        console.error(`❌ Невалидный уровень воды: ${wLevel} для позиции (${wx}, ${wz})`)
+                        wLevel = -999
+                    }
+                    
+                    // Логируем первые несколько позиций для отладки
+                    if (isFirstChunk && i === 0 && k === 0) {
+                        console.log(`📐 Данные генерации для (${wx}, ${wz}): biome=${biome}, height=${height}, wLevel=${wLevel}`)
+                    }
+                } catch (genErr) {
+                    console.error(`💥 Ошибка при получении данных генерации для (${wx}, ${wz}):`, genErr)
+                    // Используем безопасные значения по умолчанию
+                    biome = "plains"
+                    height = 50
+                    wLevel = -999
+                }
 
                 for (let j = 0; j < SY; j++) {
 
@@ -133,8 +216,8 @@ const WATER = ids.waterID;
 
                         const depth = wLevel - wy;
 
-                        if (depth === 1) data.set(i, j, k, SAND);
-                        else if (depth <= 3) data.set(i, j, k, DIRT);
+                        if (depth === 1) data.set(i, j, k, safeGetBlock(SAND, STONE));
+                        else if (depth <= 3) data.set(i, j, k, safeGetBlock(DIRT, STONE));
                         else data.set(i, j, k, STONE);
 
                         continue;
@@ -497,16 +580,104 @@ if (wy < height) {
             }
         }
 
-        noa.world.setChunkData(id, data);
+            // Проверяем что в чанке есть хотя бы несколько блоков (не все воздух)
+            let solidBlockCount = 0
+            let totalBlocks = 0
+            if (data && data.shape) {
+                const SX = data.shape[0]
+                const SY = data.shape[1]
+                const SZ = data.shape[2]
+                // Проверяем только несколько случайных позиций для производительности
+                for (let checkI = 0; checkI < Math.min(10, SX); checkI += Math.max(1, Math.floor(SX/10))) {
+                    for (let checkJ = 0; checkJ < Math.min(10, SY); checkJ += Math.max(1, Math.floor(SY/10))) {
+                        for (let checkK = 0; checkK < Math.min(10, SZ); checkK += Math.max(1, Math.floor(SZ/10))) {
+                            totalBlocks++
+                            try {
+                                const blockValue = data.get ? data.get(checkI, checkJ, checkK) : 0
+                                if (blockValue !== undefined && blockValue !== null && blockValue !== 0) {
+                                    solidBlockCount++
+                                }
+                            } catch (e) {
+                                // Игнорируем ошибки при проверке
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (isFirstChunk) {
+                console.log(`📊 Чанк (${x}, ${y}, ${z}): проверено ${totalBlocks} блоков, ${solidBlockCount} твердых`)
+            }
+            
+            // Если чанк полностью пустой, это проблема
+            if (totalBlocks > 0 && solidBlockCount === 0 && y === 0) {
+                console.warn(`⚠️ ПРЕДУПРЕЖДЕНИЕ: Чанк (${x}, ${y}, ${z}) кажется пустым (все блоки = 0 или воздух)`)
+            }
 
-        if (y === 0) {
-            generateTreesInChunk(noa, ids, x, y, z);
-            generateAnimalsInChunk(noa, ids, x, y, z);
-            // 🍄 Грибы
-            generatePlantsInChunk(noa, ids, x, y, z);
+            noa.world.setChunkData(id, data);
+            
+            if (isFirstChunk) {
+                console.log(`✅ setChunkData вызван для чанка (${x}, ${y}, ${z})`)
+            }
 
+            if (y === 0) {
+                try {
+                    generateTreesInChunk(noa, ids, x, y, z);
+                    generateAnimalsInChunk(noa, ids, x, y, z);
+                    // 🍄 Грибы
+                    generatePlantsInChunk(noa, ids, x, y, z);
+                } catch (genErr) {
+                    console.error("💥 Ошибка при генерации деревьев/животных/растений:", genErr)
+                    // Продолжаем - это не критично
+                }
+            }
+        } catch (err) {
+            console.error("💥 КРИТИЧЕСКАЯ ОШИБКА В ГЕНЕРАЦИИ ЧАНКА:", err)
+            console.error("📍 Детали чанка:", { id, x, y, z, shape: data?.shape })
+            console.error("📦 Доступные блоки:", B ? Object.keys(B) : "Блоки не загружены")
+            console.error("🔍 Стек ошибки:", err.stack)
+            
+            // Пытаемся заполнить чанк хотя бы камнем, чтобы игра не сломалась
+            try {
+                if (data && data.set && STONE) {
+                    const SX = data.shape[0];
+                    const SY = data.shape[1];
+                    const SZ = data.shape[2];
+                    for (let i = 0; i < SX; i++) {
+                        for (let j = 0; j < SY; j++) {
+                            for (let k = 0; k < SZ; k++) {
+                                // Заполняем нижнюю часть чанка камнем как fallback
+                                if (y + j < 50) {
+                                    data.set(i, j, k, STONE)
+                                } else {
+                                    data.set(i, j, k, 0)
+                                }
+                            }
+                        }
+                    }
+                    noa.world.setChunkData(id, data)
+                    console.warn("⚠️ Чанк заполнен fallback данными (камень)")
+                } else {
+                    console.error("❌ Не удалось заполнить чанк fallback данными")
+                }
+            } catch (fallbackErr) {
+                console.error("❌ КРИТИЧЕСКАЯ ОШИБКА: Не удалось даже заполнить fallback:", fallbackErr)
+            }
         }
     });
+    
+    console.log("✅ Обработчик worldDataNeeded зарегистрирован")
+    
+    // Проверяем что обработчик действительно зарегистрирован
+    // (это сложно проверить напрямую, но можем попробовать)
+    if (noa.world && noa.world._listeners) {
+        const listeners = noa.world._listeners["worldDataNeeded"]
+        if (listeners && listeners.length > 0) {
+            console.log(`✅ Подтверждено: ${listeners.length} обработчик(ов) worldDataNeeded зарегистрировано`)
+        } else {
+            console.warn("⚠️ Предупреждение: обработчики worldDataNeeded не найдены в _listeners")
+        }
+    }
     
     console.log("✅ Генерация мира зарегистрирована")
 }

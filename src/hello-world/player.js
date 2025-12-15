@@ -1,6 +1,7 @@
 // player.js
 import { noa } from "./engine.js"
 import { removeItem } from "./ui/inventory.js"
+import { respawnPlayer } from "./index.js"
 
 // Система здоровья игрока
 let playerHealth = 100
@@ -32,10 +33,11 @@ export function damagePlayer(amount) {
     
     console.log(`💔 Игрок получил урон! Здоровье: ${playerHealth}/${playerMaxHealth}`)
     
-    // Если здоровье упало до 0, можно добавить логику смерти
+    // Если здоровье упало до 0, запускаем процесс смерти и перерождения
     if (playerHealth <= 0) {
         console.log("💀 Игрок умер!")
-        // Здесь можно добавить логику смерти (респавн, экран смерти и т.д.)
+        // Вызываем функцию перерождения, которая покажет экран смерти и перезагрузит мир
+        respawnPlayer()
     }
 }
 

@@ -35,3 +35,4 @@ build-vae:
 
 build-game:
 	docker build --platform linux/amd64 -f Dockerfile -t nasturra/game-server:latest .
+	docker push nasturra/game-server:latest
