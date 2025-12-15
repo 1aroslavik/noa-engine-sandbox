@@ -2,31 +2,104 @@
 <html lang="en">
 
 <head>
-  <title>noa-examples</title>
+  <title>Noa Examples — Minecraft Style</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width">
-  <style type="text/css">
-    body {
-      font-family: Arial, Helvetica, sans-serif;
+
+  <style>
+    @font-face {
+      font-family: "Minecraft";
+      src: url("https://fonts.cdnfonts.com/s/15877/MinecraftRegular-Bmg3.woff") format("woff");
+      font-display: swap;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+
+      /* Minecraft background, but NOT repeated */
+      background-image: url("sc.png");
+      background-repeat: no-repeat;
+      background-size: cover; /* or 100% 100% for pixel-style */
+      background-position: center center;
+      image-rendering: pixelated;
+
+      display: flex;
+      justify-content: center;
+      align-items: center;
+
+      font-family: "Minecraft", monospace;
+      color: white;
+    }
+
+    .menu {
+      text-align: center;
+      background: rgba(0, 0, 0, 0.55);
+      padding: 30px 60px;
+      border: 3px solid #000;
+      image-rendering: pixelated;
+      box-shadow: 0 0 20px #000;
+    }
+
+    h1, h3 {
+      margin: 0 0 20px 0;
+      text-shadow: 3px 3px 0px #000;
+      font-size: 28px;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 20px 0;
+    }
+
+    .mc-btn {
+      display: block;
+      padding: 12px 20px;
+      margin: 10px 0;
+      background: #999;
+      border: 3px solid #000;
+      width: 260px;
+      font-size: 20px;
+      color: #fff;
+      image-rendering: pixelated;
+      cursor: pointer;
+      text-shadow: 2px 2px 0px #000;
+      transition: all 0.1s ease;
+      text-decoration: none;
+    }
+
+    .mc-btn:hover {
+      background: #bbb;
+      transform: translateY(-2px);
+    }
+
+    .authors {
+      margin-top: 25px;
+      text-shadow: 2px 2px 0px #000;
+      font-size: 18px;
     }
   </style>
 </head>
 
 <body>
-  <h3>Noa engine demos:
+
+  <div class="menu">
+
+    <h1>Noa Engine Sandbox</h1>
+
+    <a href="hello-world/" class="mc-btn">▶ Play</a>
+
+    <h3 class="authors">Made by:</h3>
     <ul>
-      <li><a href="hello-world/">hello-world</a> - a bare minimum world, suitable for building on top of</li>
-      <li><a href="test/">testbed</a> - a testbed world that minimally implements most/all engine features</li>
-      <li><a href="stress/">stress test</a> - tests the performance of long view distances and crunchy terrain</li>
+      <li>Maeva Anastasia</li>
+      <li>Babenco Iaroslava</li>
     </ul>
-  </h3>
-  
-  <hr>
-  <h3>Авторы:</h3>
-  <ul>
-    <li>Маева Анастасия</li>
-    <li>Ярослава Бабенко</li>
-  </ul>
+
+  </div>
+
 </body>
 
 </html>
