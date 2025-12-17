@@ -1122,26 +1122,45 @@ resultSlot.onclick = async () => {
         } else {
           // Если нет _side, значит это простой блок - генерируем только одну текстуру
           console.log('✅ Смешанная текстура сгенерирована (простой блок):', resultName)
+          
+          // Отправляем событие для простого блока
+          window.dispatchEvent(new CustomEvent('textureGenerated', {
+            detail: { textureName: resultName, textureData: mixedTexture }
+          }))
         }
         
-        // Отправляем событие для обновления материалов (side текстура или основная)
-        window.dispatchEvent(new CustomEvent('textureGenerated', {
-          detail: { textureName: resultName, textureData: mixedTexture }
-        }))
+        // Для блоков с _side отправляем событие после генерации top
+        if (resultName.includes('_side')) {
+          // Событие уже отправлено выше для top текстуры
+          // Отправляем событие для side текстуры
+          window.dispatchEvent(new CustomEvent('textureGenerated', {
+            detail: { textureName: resultName, textureData: mixedTexture }
+          }))
+        }
         
-        // Ждем немного, чтобы блок успел зарегистрироваться
-        await new Promise(resolve => setTimeout(resolve, 200))
+        // Ждем больше времени, чтобы блок успел зарегистрироваться
+        await new Promise(resolve => setTimeout(resolve, 500))
         
         // Проверяем, зарегистрирован ли блок
         // @ts-ignore
         const globalBlocksMap = window.blocksMap
         const blockName = resultName.replace('_side', '').replace('_top', '')
+        console.log(`🔍 Проверка регистрации блока: ${blockName} (из resultName: ${resultName})`)
         if (globalBlocksMap && globalBlocksMap[blockName]) {
           console.log(`✅ Блок ${blockName} успешно зарегистрирован (ID: ${globalBlocksMap[blockName]})`)
         } else {
           console.warn(`⚠ Блок ${blockName} не найден в blocksMap после генерации текстур`)
           // @ts-ignore
           console.log('Доступные блоки:', Object.keys(globalBlocksMap || {}))
+          console.log('Попробуем еще раз через 500ms...')
+          // Пробуем еще раз
+          await new Promise(resolve => setTimeout(resolve, 500))
+          // @ts-ignore
+          if (globalBlocksMap && globalBlocksMap[blockName]) {
+            console.log(`✅ Блок ${blockName} найден после повторной проверки (ID: ${globalBlocksMap[blockName]})`)
+          } else {
+            console.error(`❌ Блок ${blockName} все еще не найден в blocksMap`)
+          }
         }
       } catch (err) {
         console.error('❌ Ошибка при генерации смешанной текстуры:', err)

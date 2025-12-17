@@ -142,34 +142,34 @@ export const ITEM_DEFINITIONS = {
     craftDifficulty: CRAFT_DIFFICULTY.TRIVIAL,
     description: 'Камень'
   },
-  // Блоки с травой из разных биомов
+  // Блоки с травой из разных биомов (отображаются как dirt)
   'grass_block_plains': {
     name: 'grass_block_plains',
     rarity: RARITY.COMMON,
     type: MATERIAL_TYPE.MINERAL,
     craftDifficulty: CRAFT_DIFFICULTY.TRIVIAL,
-    description: 'Блок с травой равнин'
+    description: 'Земля равнин'
   },
   'grass_block_tundra': {
     name: 'grass_block_tundra',
     rarity: RARITY.COMMON,
     type: MATERIAL_TYPE.MINERAL,
     craftDifficulty: CRAFT_DIFFICULTY.TRIVIAL,
-    description: 'Блок с травой тундры'
+    description: 'Земля тундры'
   },
   'grass_block_desert': {
     name: 'grass_block_desert',
     rarity: RARITY.COMMON,
     type: MATERIAL_TYPE.MINERAL,
     craftDifficulty: CRAFT_DIFFICULTY.TRIVIAL,
-    description: 'Блок с травой пустыни'
+    description: 'Земля пустыни'
   },
   'grass_block_mountain': {
     name: 'grass_block_mountain',
     rarity: RARITY.COMMON,
     type: MATERIAL_TYPE.MINERAL,
     craftDifficulty: CRAFT_DIFFICULTY.TRIVIAL,
-    description: 'Блок с травой гор'
+    description: 'Земля гор'
   },
   
   // Земля из разных биомов
@@ -512,11 +512,11 @@ export function getShortName(itemName) {
     'grass_dry_top': 'DryGr',
     'grass_dry_side': 'DryGr',
     'snow_transition_side': 'Snow',
-    // Блоки с травой из разных биомов
-    'grass_block_plains': 'GrassP',
-    'grass_block_tundra': 'GrassT',
-    'grass_block_desert': 'GrassD',
-    'grass_block_mountain': 'GrassM',
+    // Блоки с травой из разных биомов (отображаются как dirt)
+    'grass_block_plains': 'DirtP',
+    'grass_block_tundra': 'DirtT',
+    'grass_block_desert': 'DirtD',
+    'grass_block_mountain': 'DirtM',
     // Земля из разных биомов
     'dirt_plains': 'DirtP',
     'dirt_tundra': 'DirtT',

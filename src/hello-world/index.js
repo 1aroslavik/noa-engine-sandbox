@@ -1081,6 +1081,27 @@ function setupInteraction(placeBlockID, blocksMap, waterID) {
         'enhanced_dirt': blocksMap['enhanced_dirt'] || blocksMap['dirt'] || null,
     }
     
+    // Обработчик события регистрации нового блока - обновляем маппинг
+    window.addEventListener('blockRegistered', (event) => {
+        // @ts-ignore
+        const { blockName, blockId } = event.detail
+        console.log(`🔄 Обновление маппинга после регистрации блока: ${blockName} -> ${blockId}`)
+        
+        // Обновляем itemToBlockMap для нового блока (если его там еще нет)
+        if (itemToBlockMap[blockName] === undefined || itemToBlockMap[blockName] === null) {
+            itemToBlockMap[blockName] = blockId
+            console.log(`✅ Маппинг обновлен: ${blockName} -> ${blockId}`)
+        }
+        
+        // Также обновляем глобальный blocksMap, если его еще нет
+        // @ts-ignore
+        if (window.blocksMap && !window.blocksMap[blockName]) {
+            // @ts-ignore
+            window.blocksMap[blockName] = blockId
+            console.log(`✅ Глобальный blocksMap обновлен: ${blockName} -> ${blockId}`)
+        }
+    })
+    
     // Функция для получения имени блока из имени предмета
     function getBlockNameFromItemName(itemName) {
         console.log(`🔍 Преобразование имени предмета в блок: ${itemName}`)
