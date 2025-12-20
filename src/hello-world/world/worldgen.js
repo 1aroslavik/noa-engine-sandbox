@@ -24,6 +24,20 @@ import { createNoise2D } from "simplex-noise";
 import { generatePlantsInChunk } from "./plants.js";
 // Пещерные шумы (оставляем твои)
 const iceSpikeNoise = createNoise2D(() => Math.random());
+const postGenQueue = []
+let postGenRunning = false
+
+function runPostGenQueue(noa, ids) {
+  if (postGenRunning) return
+  postGenRunning = true
+
+  noa.on("tick", () => {
+    // делаем максимум 1 задачу за кадр
+    const job = postGenQueue.shift()
+    if (!job) return
+    try { job() } catch (e) {}
+  })
+}
 
 function N2(fn, x, z, s) {
     return fn(x * s, z * s);
@@ -55,6 +69,7 @@ export function getWaterLevel(x, z) {
 // ГЕНЕРАЦИЯ МИРА
 // =====================================================
 export function registerWorldGeneration(noa, ids) {
+    runPostGenQueue(noa, ids)
 
     const B = ids.blocks;
     const GRASS_PLANT = ids.grassID; 
@@ -562,7 +577,7 @@ if (wy < height) {
                     // =====================================================
                     // ВОЗДУХ
                     // =====================================================
-                    data.set(i, j, k, 0);
+                    
                 }
 
                 // =====================================================
@@ -621,16 +636,12 @@ if (wy < height) {
             }
 
             if (y === 0) {
-                try {
-                    generateTreesInChunk(noa, ids, x, y, z);
-                    generateAnimalsInChunk(noa, ids, x, y, z);
-                    // 🍄 Грибы
-                    generatePlantsInChunk(noa, ids, x, y, z);
-                } catch (genErr) {
-                    console.error("💥 Ошибка при генерации деревьев/животных/растений:", genErr)
-                    // Продолжаем - это не критично
-                }
-            }
+  const cx = x, cy = y, cz = z
+  postGenQueue.push(() => generateTreesInChunk(noa, ids, cx, cy, cz))
+  postGenQueue.push(() => generatePlantsInChunk(noa, ids, cx, cy, cz))
+  postGenQueue.push(() => generateAnimalsInChunk(noa, ids, cx, cy, cz))
+}
+
         } catch (err) {
             console.error("💥 КРИТИЧЕСКАЯ ОШИБКА В ГЕНЕРАЦИИ ЧАНКА:", err)
             console.error("📍 Детали чанка:", { id, x, y, z, shape: data?.shape })

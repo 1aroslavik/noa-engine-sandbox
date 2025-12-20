@@ -1,3 +1,5 @@
+
+
 // index.js
 import { Engine } from "noa-engine"
 import { initMaterialsAndBlocks } from "./materials.js"
@@ -11,18 +13,31 @@ import "./ui/inventory.js" // Подключаем инвентарь и кра�
 import { addItem } from "./ui/inventory.js"
 import { getItemDefinition } from "./ui/items.js"
 import { initHealthUI } from "./player.js"
-
+import { prewarmWorld } from "./world/prewarm.js"
+// =======================
+//  GLOBAL DEBUG OFF
+// =======================
+if (import.meta.env?.MODE !== "development") {
+    console.log = () => {}
+    console.warn = () => {}
+    console.debug = () => {}
+}
 // =======================
 //    СОЗДАЁМ ДВИЖОК
 // =======================
 const noa = new Engine({
-    debug: true,
+    debug: false,
     showFPS: true,
     chunkSize: 32,
-    chunkAddDistance: 2.5,
-    chunkRemoveDistance: 3.5,
-    playerStart: [0, 200, 0],
+
+    // ⛔ ВАЖНО
+    chunkAddDistance: 0,
+    chunkRemoveDistance: 0,
+
+    playerStart: [0, 1000, 0], // вне мира
 })
+
+
 
 // Отключаем дефолтную привязку E к alt-fire, если она есть
 // Привязываем alt-fire только к R
@@ -35,322 +50,107 @@ window.noa = noa
 //       СТАРТ ИГРЫ
 // =======================
 async function start() {
-    console.log("🚀 Старт: проверка готовности движка...")
+    console.log("🚀 Старт движка")
     updateLoadingText("Initializing engine...")
-    
-    // Ждем полной инициализации движка
+
+    // =====================================================
+    // 1️⃣ Ждём полной готовности движка
+    // =====================================================
     await waitForEngineReady()
-    
-    console.log("🚀 Старт: загрузка текстур и блоков")
+
+    // =====================================================
+    // 2️⃣ Загружаем материалы и блоки
+    // =====================================================
+    console.log("📦 Загрузка блоков")
     updateLoadingText("Loading textures and blocks...")
 
     const ids = await initMaterialsAndBlocks(noa)
-    
-    // Проверяем что блоки загружены
-    if (!ids || !ids.blocks || typeof ids.blocks !== 'object') {
-        console.error("❌ КРИТИЧЕСКАЯ ОШИБКА: Блоки не загружены!", { ids })
-        throw new Error("Blocks not loaded properly")
-    }
-    
-    console.log("✅ Блоки загружены:", Object.keys(ids.blocks).length, "блоков")
-    
-    updateLoadingText("Setting up world generation...")
 
-    // установить ID воды
+    if (!ids || !ids.blocks || typeof ids.blocks !== "object") {
+        console.error("❌ КРИТИЧЕСКАЯ ОШИБКА: блоки не загружены", ids)
+        throw new Error("Blocks not loaded")
+    }
+
+    console.log("✅ Блоки загружены:", Object.keys(ids.blocks).length)
+
+    // Устанавливаем ID воды
     setWaterID(ids.waterID)
 
-    // =========================================================
-    // 🔍 Проверка: вызывается ли worldDataNeeded? 
-    // Если нет — перезагрузить страницу
-    // =========================================================
-    let worldgenCalled = false;
-    let worldgenErrorCount = 0;
+    // =====================================================
+    // 3️⃣ Диагностика генерации мира
+    // =====================================================
+    let worldgenCalled = false
 
-    // Ловим вызовы worldDataNeeded ДО регистрации генерации
-    // Это нужно для отслеживания, что движок запрашивает чанки
     noa.world.on("worldDataNeeded", (id, data, x, y, z) => {
-        worldgenCalled = true;
-        console.log("🔔 worldDataNeeded вызван! id:", id, "x:", x, "y:", y, "z:", z);
-    });
+        worldgenCalled = true
+        console.log("🔔 worldDataNeeded:", id, x, y, z)
+    })
 
-    // Регистрируем генерацию мира - это должно быть ДО того, как движок начнет запрашивать чанки
+    // =====================================================
+    // 4️⃣ Регистрируем генерацию мира
+    // =====================================================
+    console.log("🌍 Регистрация генерации мира")
+    updateLoadingText("Setting up world generation...")
+
     registerWorldGeneration(noa, ids)
-    
-    console.log("✅ Генерация мира зарегистрирована, обработчики установлены")
-    
-    // Проверяем что обработчики действительно зарегистрированы
-    try {
-        // @ts-ignore - _listeners может быть приватным свойством
-        const listeners = noa.world?._listeners?.["worldDataNeeded"]
-        if (listeners) {
-            console.log(`🔍 Проверка регистрации: найдено ${listeners.length} обработчик(ов) worldDataNeeded`)
-        } else {
-            console.warn("⚠️ Не удалось проверить регистрацию обработчиков")
-        }
-    } catch (e) {
-        console.warn("⚠️ Не удалось проверить регистрацию обработчиков:", e)
-    }
 
-    // Проверяем через 10 секунд после старта
-    setTimeout(() => {
-        if (!worldgenCalled) {
-            console.error("❌ GEN CALL не был вызван! Генерация МИРА НЕ РАБОТАЕТ!");
-            console.error("🔍 Проверка состояния движка:", {
-                hasWorld: !!noa.world,
-                hasRendering: !!noa.rendering,
-                hasPlayer: !!noa.playerEntity,
-                blocksCount: Object.keys(ids.blocks).length
-            })
-            console.warn("🔄 Перезагрузка страницы...");
-
-            // Перезагрузка
-            location.reload();
-        } else {
-            console.log("✅ worldDataNeeded вызывается, генерация работает")
-        }
-    }, 10000); // 10 секунд
-
-// Ловим ситуацию, когда чанк загрузился, но в нём НЕТ ни одного блока
-noa.world.on("chunkLoaded", (chunkID, chunk) => {
-    const arr = chunk.voxels
-    let solidCount = 0
-
-    for (let i = 0; i < arr.length; i++) {
-        if (arr[i] !== 0) {
-            solidCount++
-            break
-        }
-    }
-
-    if (solidCount === 0) {
-        console.error("❌ ПУСТОЙ ЧАНК -> chunkID:", chunkID)
-
-        const [cx, cy, cz] = chunkID
-        console.error("📍 Координаты чанка:", { cx, cy, cz })
-
-        // Проверяем getHeightAt
-        try {
-            const h = getHeightAt(cx * 32, cz * 32)
-            console.error("📏 getHeightAt вернул:", h)
-
-            if (!Number.isFinite(h)) {
-                console.error("🚨 ОШИБКА: getHeightAt -> NaN или Infinity")
-            }
-            if (h < -1000 || h > 2000) {
-                console.error("🚨 ОШИБКА: нереальная высота:", h)
-            }
-        } catch (e) {
-            console.error("💥 ИСКЛЮЧЕНИЕ В getHeightAt:", e)
-        }
-
-        // Проверяем биом
-        try {
-            const biome = getBiome(cx * 32, cz * 32)
-            console.error("🌍 Биом:", biome)
-        } catch (e) {
-            console.error("💥 getBiome ERROR:", e)
-        }
-
-        // Проверяем воду
-        try {
-            const wl = getHeightAt(cx * 32, cz * 32)
-            if (wl !== -999) {
-                console.warn("💧 Возможно вода заполняет чанк.")
-            }
-        } catch(e) {}
-
-        console.error("🧩 ИТОГ: Чанк пустой. Ищи ошибки в getHeightAt / cave / waterLevel.")
-    }
-})
+    console.log("✅ Генерация мира зарегистрирована")
 
 
-// =========================================================
-// Ловим ошибки внутри генератора чанков
-// Примечание: основной обработчик генерации находится в worldgen.js
-// Этот обработчик только отслеживает вызовы для диагностики
-// =========================================================
+    // =====================================================
+    // 7️⃣ ПРОГРЕВ ЧАНКОВ (КРИТИЧНО)
+    // =====================================================
+    console.log("🔥 Прогрев чанков")
+    updateLoadingText("Prewarming world...")
+    await prewarmWorld(noa, 3)
 
-    // Проверяем что движок готов
-    if (!noa.world) {
-        console.error("❌ Ошибка: движок мира не инициализирован")
-        throw new Error("World engine not initialized")
-    }
-    
-    // Проверяем что обработчик генерации зарегистрирован
-    // Примечание: registerWorldGeneration регистрирует обработчик синхронно,
-    // поэтому он уже должен быть зарегистрирован к этому моменту
-    console.log("✅ Движок готов, обработчик генерации зарегистрирован")
-    
-    // Даем движку небольшое время на обработку регистрации
-    // Это важно для продакшена, где может быть задержка
-    await new Promise(resolve => setTimeout(resolve, 100))
-    
-    // Принудительно запрашиваем генерацию тестового чанка для проверки
-    // Это помогает убедиться что обработчик работает
-    console.log("🔍 Принудительный запрос тестового чанка...")
-    try {
-        const testChunkX = 0
-        const testChunkZ = 0
-        const testY = 0
-        const testBlockX = testChunkX + 16
-        const testBlockY = testY + 10
-        const testBlockZ = testChunkZ + 16
-        
-        console.log(`🔍 Запрашиваем блок на позиции (${testBlockX}, ${testBlockY}, ${testBlockZ})`)
-        
-        // Пробуем получить блок в центре чанка (0,0,0)
-        // Это заставит движок запросить чанк и вызвать worldDataNeeded
-        const testBlock = noa.getBlock(testBlockX, testBlockY, testBlockZ)
-        console.log("✅ Тестовый запрос чанка выполнен, блок:", testBlock)
-        
-        // Даем время на обработку
-        await new Promise(resolve => setTimeout(resolve, 200))
-        
-        // Проверяем еще раз
-        const testBlock2 = noa.getBlock(testBlockX, testBlockY, testBlockZ)
-        console.log("✅ Повторная проверка блока:", testBlock2)
-        
-        // Пробуем запросить чанк через запрос блоков в разных точках чанка
-        console.log("🔍 Пробуем запросить чанк через множественные запросы блоков...")
-        // Вычисляем координаты чанка (используем chunkSize из конфигурации движка)
-        const chunkSize = 32 // Из конфигурации движка: chunkSize: 32
-        const chunkX = Math.floor(testBlockX / chunkSize) * chunkSize
-        const chunkZ = Math.floor(testBlockZ / chunkSize) * chunkSize
-        const chunkY = Math.floor(testBlockY / chunkSize) * chunkSize
-        
-        console.log(`🔍 Запрашиваем блоки в чанке: (${chunkX}, ${chunkY}, ${chunkZ})`)
-        
-        // Проверяем состояние движка перед запросом
-        console.log("🔍 Состояние движка:", {
-            hasWorld: !!noa.world,
-            hasRendering: !!noa.rendering,
-            hasPlayer: !!noa.playerEntity
-        })
-        
-        // Принудительно запрашиваем блоки в разных точках чанка для генерации
-        // Запрашиваем на разных высотах, включая поверхность
-        const surfaceHeight = Math.floor(getHeightAt(chunkX + chunkSize/2, chunkZ + chunkSize/2))
-        console.log(`📏 Высота поверхности в центре чанка: ${surfaceHeight}`)
-        
-        for (let offsetX = 0; offsetX < chunkSize; offsetX += 4) {
-            for (let offsetZ = 0; offsetZ < chunkSize; offsetZ += 4) {
-                // Запрашиваем блоки на поверхности и вокруг неё
-                for (let offsetY = -5; offsetY <= 5; offsetY++) {
-                    const checkY = surfaceHeight + offsetY
-                    if (checkY >= 0 && checkY < 200) {
-                        try {
-                            noa.getBlock(chunkX + offsetX, checkY, chunkZ + offsetZ)
-                        } catch (e) {
-                            // Игнорируем ошибки
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Даем время на обработку
-        await new Promise(resolve => setTimeout(resolve, 500))
-    } catch (e) {
-        console.log("ℹ️ Тестовый запрос чанка (это нормально при первой загрузке):", e.message)
-    }
-
-    setupPlayerMesh()
-
-    // выбираем пригодный блок для E
-    const grassBlock =
-        ids.blocks["grass_top"] ||
-        ids.blocks["grass"] ||
-        Object.values(ids.blocks)[0]
-
-    // Сохраняем blocksMap глобально для динамического доступа
-    // @ts-ignore
-    window.blocksMap = ids.blocks
-    
-    setupInteraction(grassBlock, ids.blocks, ids.waterID)
-
-    // ======= СПАВН У ВОДЫ =======
+    // =====================================================
+    // 8️⃣ СПАВН ИГРОКА
+    // =====================================================
+    console.log("👤 Спавн игрока")
     updateLoadingText("Spawning player...")
     await waitForPlayerSpawn(ids)
-    
-    // Проверяем позицию игрока и высоту в этой точке
-    const playerPos = noa.entities.getPosition(noa.playerEntity)
-    if (playerPos) {
-        const [px, py, pz] = playerPos
-        console.log(`📍 Игрок заспавнен на: [${px.toFixed(2)}, ${py.toFixed(2)}, ${pz.toFixed(2)}]`)
-        
-        // Проверяем высоту в точке спавна
-        try {
-            const spawnHeight = getHeightAt(Math.floor(px), Math.floor(pz))
-            console.log(`📏 Высота в точке спавна (${Math.floor(px)}, ${Math.floor(pz)}): ${spawnHeight}`)
-            
-            if (!Number.isFinite(spawnHeight)) {
-                console.error("❌ ОШИБКА: getHeightAt вернул невалидное значение:", spawnHeight)
-            }
-        } catch (e) {
-            console.error("❌ Ошибка при получении высоты:", e)
-        }
-    }
-    
-    // Даем движку время на обработку спавна и начало загрузки чанков
-    updateLoadingText("Preparing world...")
-    await new Promise(resolve => setTimeout(resolve, 300))
-    
-    // Принудительно запрашиваем блоки вокруг игрока для генерации чанков
-    if (playerPos) {
-        const [px, py, pz] = playerPos
-        const floorX = Math.floor(px)
-        const floorY = Math.floor(py)
-        const floorZ = Math.floor(pz)
-        
-        console.log("🔍 Принудительно запрашиваем блоки вокруг игрока для генерации чанков...")
-        console.log(`📍 Позиция игрока: [${floorX}, ${floorY}, ${floorZ}]`)
-        
-        // Запрашиваем блоки на разных высотах, включая поверхность
-        // Это важно, потому что движок может не запрашивать чанки на очень высоких позициях
-        const surfaceY = Math.floor(getHeightAt(floorX, floorZ))
-        console.log(`📏 Высота поверхности в точке (${floorX}, ${floorZ}): ${surfaceY}`)
-        
-        // Запрашиваем блоки на поверхности и вокруг неё
-        for (let dx = -2; dx <= 2; dx++) {
-            for (let dz = -2; dz <= 2; dz++) {
-                for (let dy = -10; dy <= 5; dy++) {
-                    const checkY = surfaceY + dy
-                    // Запрашиваем только разумные высоты
-                    if (checkY >= 0 && checkY < 200) {
-                        try {
-                            noa.getBlock(floorX + dx, checkY, floorZ + dz)
-                        } catch (e) {
-                            // Игнорируем ошибки
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Также запрашиваем блоки на позиции игрока
-        for (let dy = -10; dy <= 2; dy++) {
-            try {
-                noa.getBlock(floorX, floorY + dy, floorZ)
-            } catch (e) {
-                // Игнорируем ошибки
-            }
-        }
-        
-        console.log("✅ Запросы блоков отправлены, ждем генерации...")
-        await new Promise(resolve => setTimeout(resolve, 1000)) // Увеличиваем время ожидания
-    }
+const grassBlock =
+    ids.blocks["grass_top"] ||
+    ids.blocks["grass"] ||
+    Object.values(ids.blocks)[0]
 
-    // Проверяем что мир сгенерировался и ждем если нужно
-    await waitForWorldGeneration()
+// сохранить blocksMap глобально (у тебя код этого ждёт)
+window.blocksMap = ids.blocks
 
-    // Инициализируем UI здоровья
+setupInteraction(grassBlock, ids.blocks, ids.waterID)
+    // =====================================================
+    // 9️⃣ ВКЛЮЧАЕМ НОРМАЛЬНУЮ ЗАГРУЗКУ МИРА
+    // =====================================================
+    noa.world.setAddRemoveDistance(3, 4)
+
+
+
+
+    // =====================================================
+    // 1️⃣2️⃣ Инициализация UI
+    // =====================================================
     initHealthUI()
 
-    // Скрываем окно загрузки после полной инициализации
+    console.log("✅ Мир полностью готов")
     hideLoadingScreen()
 }
 
 start()
+function prewarmChunks(noa, x, z) {
+  const y = 32
+  const pts = [
+    [x, z],
+    [x + 16, z],
+    [x - 16, z],
+    [x, z + 16],
+    [x, z - 16],
+  ]
+
+  for (const [px, pz] of pts) {
+    try { noa.getBlock(px, y, pz) } catch {}
+  }
+}
 
 // =======================
 //   ПРОВЕРКА ГОТОВНОСТИ ДВИЖКА
@@ -396,137 +196,6 @@ async function waitForEngineReady(maxAttempts = 30, delayMs = 100) {
 // =======================
 //   ПРОВЕРКА ГЕНЕРАЦИИ МИРА
 // =======================
-async function waitForWorldGeneration(maxAttempts = 80, delayMs = 120) {
-    console.log("🌍 Проверка генерации мира...")
-    updateLoadingText("Verifying world generation...")
-    
-    // Даем движку начальное время на генерацию перед первой проверкой
-    await new Promise(resolve => setTimeout(resolve, 300))
-    
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        const playerPos = noa.entities.getPosition(noa.playerEntity)
-        if (!playerPos) {
-            console.log("👤 Игрок не заспавлен, пробуем еще раз...")
-
-            await new Promise(resolve => setTimeout(resolve, delayMs))
-            continue
-        }
-
-        const x = Math.floor(playerPos[0])
-        const y = Math.floor(playerPos[1])
-        const z = Math.floor(playerPos[2])
-
-        // Простая проверка: запрашиваем блоки под ногами игрока
-        // Это заставит движок загрузить чанк если он еще не загружен
-        const checkPositions = [
-            [x, y - 1, z],      // под ногами
-            [x, y - 2, z],      // глубже
-            [x, y - 3, z],      // еще глубже
-            [x, y - 4, z],      // еще глубже
-            [x, y - 5, z],      // еще глубже
-        ]
-
-        let hasSolidBlocks = false
-        let validBlockCount = 0
-
-        // Запрашиваем и проверяем блоки одновременно
-        for (const [bx, by, bz] of checkPositions) {
-            try {
-                const block = noa.getBlock(bx, by, bz)
-                if (block !== undefined && block !== null) {
-                    validBlockCount++
-                    if (block !== 0) {
-                        hasSolidBlocks = true
-                        console.log(`✅ Найден твердый блок на позиции (${bx}, ${by}, ${bz}):`, block)
-                        // Если нашли хотя бы один твердый блок - сразу выходим
-                        break
-                    }
-                }
-            } catch (e) {
-                // Игнорируем ошибки - это нормально если чанк еще не загружен
-            }
-        }
-
-        // Если нашли хотя бы один твердый блок - мир готов
-        if (hasSolidBlocks) {
-            console.log(`✅ Мир сгенерирован (попытка ${attempt + 1}, проверено блоков: ${validBlockCount})`)
-            updateLoadingText("World ready!")
-            await new Promise(resolve => setTimeout(resolve, 100))
-            return
-        } else {
-            if (attempt % 5 === 0) {
-                console.log(`⏳ hasSolidBlocks is false (попытка ${attempt + 1}/${maxAttempts}, проверено блоков: ${validBlockCount}, позиция игрока: [${x}, ${y}, ${z}])`)
-                // Пробуем принудительно запросить чанк
-                console.log("🔍 Принудительно запрашиваем блоки для генерации чанка...")
-                for (const [bx, by, bz] of checkPositions) {
-                    try {
-                        noa.getBlock(bx, by, bz)
-                    } catch (e) {
-                        // Игнорируем
-                    }
-                }
-            }
-        }
-
-        // Обновляем текст загрузки реже
-        if (attempt % 20 === 0 && attempt > 0) {
-            updateLoadingText("Verifying world generation...")
-        }
-
-        // Даем движку время обработать запросы
-        // Увеличиваем задержку для первых попыток, чтобы дать время на генерацию
-        const currentDelay = attempt < 10 ? delayMs * 1.5 : delayMs
-        await new Promise(resolve => setTimeout(resolve, currentDelay))
-    }
-
-    // Если не удалось подтвердить, пробуем еще раз с более длительным ожиданием
-    console.warn("⚠️ Первая проверка не удалась, пробуем еще раз с увеличенным временем ожидания...")
-    updateLoadingText("Loading world...")
-    
-    const playerPos = noa.entities.getPosition(noa.playerEntity)
-    if (playerPos) {
-        const x = Math.floor(playerPos[0])
-        const y = Math.floor(playerPos[1])
-        const z = Math.floor(playerPos[2])
-        
-        // Даем больше времени на генерацию перед проверкой
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
-        // Проверяем блоки под ногами несколько раз с увеличенными задержками
-        for (let i = 0; i < 15; i++) {
-            // Запрашиваем блоки, чтобы заставить движок их сгенерировать
-            try {
-                noa.getBlock(x, y - 1, z)
-                noa.getBlock(x, y - 2, z)
-                noa.getBlock(x, y - 3, z)
-                noa.getBlock(x, y - 4, z)
-                noa.getBlock(x, y - 5, z)
-            } catch (e) {
-                // Игнорируем ошибки - это нормально
-            }
-            
-            // Даем время на обработку
-            await new Promise(resolve => setTimeout(resolve, 150))
-            
-            // Проверяем результат
-            try {
-                const block = noa.getBlock(x, y - 1, z)
-                if (block !== undefined && block !== null && block !== 0) {
-                    console.log(`✅ Мир сгенерирован после повторной проверки (попытка ${i + 1})`)
-                    updateLoadingText("World ready!")
-                    await new Promise(resolve => setTimeout(resolve, 100))
-                    return
-                }
-            } catch (e) {
-                // Продолжаем попытки
-            }
-        }
-    }
-    
-    console.warn("⚠️ Не удалось подтвердить генерацию после всех попыток")
-    console.warn("⚠️ Продолжаем загрузку - мир будет генерироваться по мере необходимости во время игры")
-    console.warn("⚠️ Это нормально для медленных систем, игра должна работать корректно")
-}
 
 // =======================
 //   ОБНОВЛЕНИЕ ТЕКСТА ЗАГРУЗКИ
