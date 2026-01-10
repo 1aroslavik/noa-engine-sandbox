@@ -1,50 +1,58 @@
 import { createNoise3D, createNoise2D } from "simplex-noise";
 
-// 3D шум — круглые пещеры
-const caveNoise = createNoise3D(() => Math.random());
-
-// 3D шум — извилистые узкие туннели
-const tunnelNoise = createNoise3D(() => Math.random());
-
-// 2D шум — входы
-const entranceNoise = createNoise2D(() => Math.random());
-
-
 // ================================
-//       СУПЕР-РЕДКИЕ ПЕЩЕРЫ
+//        SEEDED RNG
 // ================================
+const RAW_SEED = localStorage.getItem("worldSeed") || "default"
 
-export function isCave(x, y, z) {
-
-    // пещеры почти не поднимаются наверх
-    if (y > 60) return false;
-
-    // --- маленькие сферические карманы ---
-    const cave = Math.abs(caveNoise(x * 0.03, y * 0.03, z * 0.03));
-    if (cave < 0.06) return true;  // раньше 0.12, теперь в 2 раза реже
-
-    // --- узкие короткие туннели ---
-    const tunnel = Math.abs(tunnelNoise(x * 0.02, y * 0.02, z * 0.02));
-    if (tunnel < 0.03) return true; // раньше 0.055, теперь в 2 раза реже
-
-    return false;
+function hashSeed(str) {
+    let h = 2166136261 >>> 0
+    for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i)
+        h = Math.imul(h, 16777619)
+    }
+    return h >>> 0
 }
 
+function makeRNG(seed) {
+    let s = seed || 1
+    return () => {
+        s = (s * 16807) % 2147483647
+        return (s - 1) / 2147483646
+    }
+}
 
+const WORLD_SEED = hashSeed(RAW_SEED)
+const rng = makeRNG(WORLD_SEED + 1337) // соль пещер
 
 // ================================
-//     СУПЕР-РЕДКИЕ ВХОДЫ
+//        NOISE
 // ================================
+const caveNoise     = createNoise3D(rng)
+const tunnelNoise   = createNoise3D(rng)
+const entranceNoise = createNoise2D(rng)
 
+// ================================
+//        CAVES
+// ================================
+export function isCave(x, y, z) {
+    if (y > 60) return false
+
+    const cave = Math.abs(caveNoise(x * 0.03, y * 0.03, z * 0.03))
+    if (cave < 0.06) return true
+
+    const tunnel = Math.abs(tunnelNoise(x * 0.02, y * 0.02, z * 0.02))
+    if (tunnel < 0.03) return true
+
+    return false
+}
+
+// ================================
+//     SURFACE ENTRANCES
+// ================================
 export function isSurfaceCave(x, y, z, surfaceHeight) {
+    if (y < surfaceHeight - 4) return false
 
-    // входы только на самой поверхности
-    if (y < surfaceHeight - 4) return false;
-
-    const n = Math.abs(entranceNoise(x * 0.05, z * 0.05));
-
-    // ГЛАВНОЕ УМЕНЬШЕНИЕ:  
-    // вместо 0.005–0.015 → фиксированное 0.003
-    // это ~1 вход на 200–300 блоков
-    return n < 0.003;
+    const n = Math.abs(entranceNoise(x * 0.05, z * 0.05))
+    return n < 0.003
 }

@@ -62,3 +62,38 @@ export async function mixTextures(texture1, texture2, ratio = 0.5, resultName = 
 
     return data.texture // base64 строка
 }
+export function mixPixels(aName, bName, ratio, resultName) {
+  const tex = window.cvaeTextures
+  if (!tex[aName] || !tex[bName]) return null
+
+  const a = new Image()
+  const b = new Image()
+
+  a.src = "data:image/png;base64," + tex[aName]
+  b.src = "data:image/png;base64," + tex[bName]
+
+  return new Promise(resolve => {
+    let loaded = 0
+    const done = () => {
+      loaded++
+      if (loaded < 2) return
+
+      const canvas = document.createElement("canvas")
+      canvas.width = a.width
+      canvas.height = a.height
+      const ctx = canvas.getContext("2d")
+
+      ctx.globalAlpha = 1
+      ctx.drawImage(a, 0, 0)
+
+      ctx.globalAlpha = ratio
+      ctx.drawImage(b, 0, 0)
+
+      const b64 = canvas.toDataURL("image/png").split(",")[1]
+      resolve(b64)
+    }
+
+    a.onload = done
+    b.onload = done
+  })
+}

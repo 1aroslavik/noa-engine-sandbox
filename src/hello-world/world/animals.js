@@ -3,9 +3,18 @@ import * as BABYLON from '@babylonjs/core'
 import { noiseHeight } from '../biome.js'
 import { getHeightAt } from './height.js'
 import { getBiome } from '../biome.js'
-import { createPigMaterial, createCowMaterial } from '../materials.js'
+import { createPigMaterial, createCowMaterial, createBearMaterial } from '../materials.js'
 import { addItem } from '../ui/inventory.js'
 import { damagePlayer } from '../player.js'
+
+let entityNameEl = null
+
+function getEntityNameEl() {
+    if (!entityNameEl) {
+        entityNameEl = document.getElementById("entity-name")
+    }
+    return entityNameEl
+}
 
 // Получаем noa из window (устанавливается в index.js) или из engine.js
 // @ts-ignore
@@ -27,6 +36,22 @@ export function getCows() {
     return cows
 }
 
+// ================================
+// 🔒 ДЕТЕРМИНИРОВАННЫЙ RNG
+// ================================
+function hash2D(x, z, seed = 1337) {
+    let h = seed ^ (x * 374761393) ^ (z * 668265263)
+    h = (h ^ (h >> 13)) * 1274126177
+    return (h ^ (h >> 16)) >>> 0
+}
+
+function makeChunkRNG(cx, cz, seed = 1337) {
+    let s = hash2D(cx, cz, seed)
+    return () => {
+        s = (s * 16807) % 2147483647
+        return (s - 1) / 2147483646
+    }
+}
 
 // ------------------------------------------------------------
 // Высота земли по шуму
@@ -150,115 +175,8 @@ function buildPigMesh(scene, material, size = 'normal') {
     return pig
 }
 
-export function createBear(noa, scene, x, z, y = null, type = "brown", size = "normal") {
-    const groundY = y !== null ? y : getHeightAt(x, z)
+// world/animals/bear.js (или где у тебя createBear)
 
-    const isSmall = size === "small"
-    const width = isSmall ? 0.8 : 1.2
-    const height = isSmall ? 1.2 : 1.8
-    const baseSpeed = isSmall ? 0.22 : 0.18
-    const speedVariation = isSmall ? 0.15 : 0.1
-    const offsetY = height / 2
-
-    const spawnX = Math.floor(x)
-    const spawnZ = Math.floor(z)
-
-    let foundSpot = false
-    let finalX = spawnX
-    let finalZ = spawnZ
-    let finalY = groundY
-
-    for (let dx = -2; dx <= 2 && !foundSpot; dx++) {
-        for (let dz = -2; dz <= 2 && !foundSpot; dz++) {
-            const cx = spawnX + dx
-            const cz = spawnZ + dz
-            const cy = getHeightAt(cx, cz)
-
-            const blockGround = noa.getBlock(cx, cy, cz)
-            const block1 = noa.getBlock(cx, cy + 1, cz)
-            const block2 = noa.getBlock(cx, cy + 2, cz)
-            const block3 = noa.getBlock(cx, cy + 3, cz)
-
-            if (blockGround !== 0 && block1 === 0 && block2 === 0 && block3 === 0) {
-                foundSpot = true
-                finalX = cx
-                finalZ = cz
-                finalY = cy
-            }
-        }
-    }
-
-    if (!foundSpot) {
-        console.log(`🐻 Cannot spawn bear at ${x} ${groundY} ${z}`)
-        return null
-    }
-
-    // МАТЕРИАЛЫ
-    let material = new BABYLON.StandardMaterial("bearMat", scene)
-    if (type === "polar") {
-        material.diffuseColor = new BABYLON.Color3(0.9, 0.9, 1.0)
-    } else {
-        material.diffuseColor = new BABYLON.Color3(0.4, 0.25, 0.15)
-    }
-
-    material.emissiveColor = new BABYLON.Color3(0.1, 0.1, 0.1)
-
-    const mesh = buildBearMesh(scene, material, type, size)
-    const spawnY = finalY + 1 + offsetY
-
-    const id = noa.entities.add([finalX + 0.5, spawnY, finalZ + 0.5])
-
-    noa.entities.addComponent(id, noa.entities.names.physics, {
-        width,
-        height,
-        gravity: true,
-        collideWithTerrain: true,
-        collideWithEntities: false,
-        solid: true,
-        restitution: 0,
-        friction: 0.3,
-    })
-
-    noa.entities.addComponent(id, noa.entities.names.mesh, {
-        mesh,
-        offset: [0, offsetY, 0]
-    })
-
-    const body = noa.entities.getPhysicsBody(id)
-    body.mass = 2.5
-
-    const maxHealth = isSmall ? 10 : 20
-
-    const initialAngle = Math.random() * Math.PI * 2
-    const initialRotation = initialAngle - Math.PI / 2
-
-    bears.push({
-        id,
-        mesh,
-        body,
-        type,
-        angle: initialAngle,
-        targetAngle: initialAngle,
-        currentRotation: initialRotation,
-        speed: baseSpeed + Math.random() * speedVariation,
-        directionChangeTimer: 60 + Math.floor(Math.random() * 60),
-        jumpCooldown: 0,
-        attackCooldown: 0,
-        size,
-        health: maxHealth,
-        maxHealth,
-        material,
-        originalEmissive: { r: 0.1, g: 0.1, b: 0.1 },
-        isHighlighted: false,
-        stuckCheckCounter: 0,
-        lastPosition: [finalX + 0.5, spawnY, finalZ + 0.5],
-    })
-
-    mesh.rotation.y = initialRotation
-
-    console.log(`🐻 ${type} bear spawned at ${x} ${spawnY} ${z}`)
-    return id
-}
 
 // ------------------------------------------------------------
 // Создание сущности свинки
@@ -633,6 +551,7 @@ function registerTickHandler() {
         let targetedPig = null
         let targetedCow = null
         let targetedBear = null
+
         if (currentNoa.playerEntity) {
             const playerPos = currentNoa.entities.getPosition(currentNoa.playerEntity)
             if (playerPos) {
@@ -723,6 +642,37 @@ function registerTickHandler() {
                         targetedBear = bear
                     }
                 }
+                // ================================
+// 📛 ПОКАЗ ИМЕНИ ЖИВОТНОГО (ПОСЛЕ ПОИСКА ЦЕЛИ)
+// ================================
+const nameUI = getEntityNameEl()
+let name = null
+
+if (targetedPig) {
+    name = targetedPig.size === "small" ? "Piglet" : "Pig"
+}
+else if (targetedCow) {
+    name = targetedCow.size === "small" ? "Calf" : "Cow"
+}
+else if (targetedBear) {
+    if (targetedBear.type === "polar") {
+        name = targetedBear.size === "small"
+            ? "Polar Cub"
+            : "Polar Bear"
+    } else {
+        name = targetedBear.size === "small"
+            ? "Bear Cub"
+            : "Bear"
+    }
+}
+
+if (name) {
+    nameUI.textContent = name
+    nameUI.style.display = "block"
+} else {
+    nameUI.style.display = "none"
+}
+
             }
         }
         
@@ -828,7 +778,7 @@ function registerTickHandler() {
             let distanceToPlayer = Infinity
             let isPlayerInAggroRange = false
             const AGGRO_RANGE = 10.0 // Зона агрессии - 10 блоков
-            const ATTACK_RANGE = 8.0 // Зона атаки - 8 блоков (очень большая зона поражения)
+            const ATTACK_RANGE = 5.0 // Зона атаки - 8 блоков (очень большая зона поражения)
             
             if (currentNoa.playerEntity) {
                 playerPos = currentNoa.entities.getPosition(currentNoa.playerEntity)
@@ -2065,6 +2015,165 @@ export function damageBear(noa, bear) {
     }
 }
 
+// ------------------------------------------------------------
+// Создание сущности медведя
+// ------------------------------------------------------------
+export function createBear(
+    noa,
+    scene,
+    x,
+    z,
+    y = null,
+    type = "brown", // "brown" | "polar"
+    size = "normal" // "small" | "normal"
+) {
+    const groundY = y !== null ? y : getHeightAt(x, z)
+
+    const isSmall = size === "small"
+
+    // 📦 ФИЗИЧЕСКИЕ РАЗМЕРЫ
+    const width  = isSmall ? 0.9 : 1.3
+    const height = isSmall ? 1.4 : 2.0
+    const offsetY = height / 2
+
+    // 🏃 СКОРОСТЬ
+    const baseSpeed = isSmall ? 0.18 : 0.14
+    const speedVariation = isSmall ? 0.08 : 0.06
+
+    // ❤️ ЗДОРОВЬЕ
+    const maxHealth = isSmall ? 20 : 35
+
+    // ------------------------------------------------------------
+    // 🔍 ПОИСК СВОБОДНОГО МЕСТА
+    // ------------------------------------------------------------
+    const spawnX = Math.floor(x)
+    const spawnZ = Math.floor(z)
+
+    let foundSpot = false
+    let finalX = spawnX
+    let finalZ = spawnZ
+    let finalY = groundY
+
+    for (let dx = -3; dx <= 3 && !foundSpot; dx++) {
+        for (let dz = -3; dz <= 3 && !foundSpot; dz++) {
+            const checkX = spawnX + dx
+            const checkZ = spawnZ + dz
+            const checkY = getHeightAt(checkX, checkZ)
+
+            const blockGround = noa.getBlock(checkX, checkY, checkZ)
+            const blockBody   = noa.getBlock(checkX, checkY + 1, checkZ)
+            const blockHead   = noa.getBlock(checkX, checkY + 2, checkZ)
+
+            if (blockGround !== 0 && blockBody === 0 && blockHead === 0) {
+                foundSpot = true
+                finalX = checkX
+                finalZ = checkZ
+                finalY = checkY
+            }
+        }
+    }
+
+    if (!foundSpot) {
+        console.log(`🐻 Cannot spawn bear at ${x} ${groundY} ${z}`)
+        return null
+    }
+
+    // ------------------------------------------------------------
+    // 🎨 МАТЕРИАЛ + МЕШ
+    // ------------------------------------------------------------
+    const material = createBearMaterial(noa, type)
+    const mesh = buildBearMesh(scene, material, type, size)
+
+    const spawnY = finalY + 1 + offsetY
+
+    // ------------------------------------------------------------
+    // 🧩 ENTITY
+    // ------------------------------------------------------------
+    const id = noa.entities.add([
+        finalX + 0.5,
+        spawnY,
+        finalZ + 0.5
+    ])
+
+    noa.entities.addComponent(id, noa.entities.names.physics, {
+        width,
+        height,
+        gravity: true,
+        collideWithTerrain: true,
+        collideWithEntities: false,
+        solid: true,
+        restitution: 0,
+        friction: 0.4
+    })
+
+    noa.entities.addComponent(id, noa.entities.names.mesh, {
+        mesh,
+        offset: [0, offsetY, 0]
+    })
+
+    const body = noa.entities.getPhysicsBody(id)
+    body.mass = isSmall ? 3 : 6
+    body.friction = 0.4
+
+    // ------------------------------------------------------------
+    // ✨ EMISSIVE (для подсветки)
+    // ------------------------------------------------------------
+    const originalEmissive =
+        type === "polar"
+            ? { r: 0.2, g: 0.2, b: 0.25 }
+            : { r: 0.15, g: 0.1, b: 0.05 }
+
+    material.emissiveColor.r = originalEmissive.r
+    material.emissiveColor.g = originalEmissive.g
+    material.emissiveColor.b = originalEmissive.b
+
+    // ------------------------------------------------------------
+    // 🐻 СОХРАНЯЕМ В МАССИВ
+    // ------------------------------------------------------------
+    const initialAngle = Math.random() * Math.PI * 2
+    const initialRotation = initialAngle - Math.PI / 2
+
+    bears.push({
+        id,
+        mesh,
+        body,
+
+        // движение
+        angle: initialAngle,
+        targetAngle: initialAngle,
+        currentRotation: initialRotation,
+        speed: baseSpeed + Math.random() * speedVariation,
+
+        directionChangeTimer: 120 + Math.floor(Math.random() * 180),
+        jumpCooldown: 0,
+        attackCooldown: 0,
+
+        // параметры
+        size,
+        type,
+
+        health: maxHealth,
+        maxHealth,
+
+        material,
+        originalEmissive,
+        isHighlighted: false,
+
+        stuckCheckCounter: 0,
+        lastPosition: [finalX + 0.5, spawnY, finalZ + 0.5],
+    })
+
+    mesh.rotation.y = initialRotation
+
+    const emoji =
+        type === "polar"
+            ? (isSmall ? "🐻‍❄️" : "🐻‍❄️")
+            : (isSmall ? "🐻" : "🐻")
+
+    console.log(`${emoji} ${type} ${size} bear spawned at ${finalX} ${spawnY} ${finalZ}`)
+
+    return id
+}
 
 // ------------------------------------------------------------
 // Generate animals in chunk
@@ -2074,14 +2183,15 @@ export function generateAnimalsInChunk(noa, ids, x0, y0, z0) {
     if (!scene) return // сцена ещё не готова
 
     // Генерируем животных в чанке (уменьшил количество попыток)
-    const animalCount = 2 + Math.floor(Math.random() * 3) // 2-4 попытки спавна на чанк
+const rng = makeChunkRNG(x0 >> 5, z0 >> 5)
+const animalCount = 2 + Math.floor(rng() * 3)
     
     // Список уже заспавненных позиций в этом чанке (чтобы не спавнить слишком близко)
     const spawnedPositions = []
 
     for (let i = 0; i < animalCount; i++) {
-        const x = x0 + Math.floor(Math.random() * 32)
-        const z = z0 + Math.floor(Math.random() * 32)
+const x = x0 + Math.floor(rng() * 32)
+const z = z0 + Math.floor(rng() * 32)
         const y = getHeightAt(x, z)
         const biome = getBiome(x, z)
         
@@ -2101,7 +2211,7 @@ export function generateAnimalsInChunk(noa, ids, x0, y0, z0) {
 
         // Спавним свинок в подходящих биомах
         if (biome === "plains" || biome === "forest" || biome === "dry") {
-            if (Math.random() < 0.4) { // 40% шанс спавна (уменьшил с 60%)
+if (rng() < 0.4){
                 const size = Math.random() < 0.5 ? 'small' : 'normal'
                 const result = createPig(noa, scene, x, z, y, size)
                 if (result) {
@@ -2115,7 +2225,7 @@ export function generateAnimalsInChunk(noa, ids, x0, y0, z0) {
 
 // ❄ Белые медведи — только холодные биомы
 if (biome === "snow" || biome === "tundra" || biome === "ice") {
-    if (Math.random() < 0.25) { // 25% шанс
+    if (rng() < 0.25) { // 25% шанс
         const size = Math.random() < 0.3 ? 'small' : 'normal'
         const result = createBear(noa, scene, x, z, y, "polar", size)
         if (result) {
@@ -2126,8 +2236,8 @@ if (biome === "snow" || biome === "tundra" || biome === "ice") {
 
 // 🟫 Коричневые медведи — лес, тайга, горы
 if (biome === "forest" || biome === "dry" || biome === "mountain") {
-    if (Math.random() < 0.35) { // 35% шанс
-        const size = Math.random() < 0.4 ? 'small' : 'normal'
+    if (rng() < 0.35) { // 35% шанс
+        const size = rng() < 0.4 ? 'small' : 'normal'
         const result = createBear(noa, scene, x, z, y, "brown", size)
         if (result) {
             spawnedPositions.push([x, z])
@@ -2138,7 +2248,7 @@ if (biome === "forest" || biome === "dry" || biome === "mountain") {
         // Спавним коров в тех же биомах, что и свиньи
         if (biome === "plains" || biome === "forest" || biome === "dry") {
             if (Math.random() < 0.3) { // 30% шанс спавна коровы (уменьшил с 50%)
-                const size = Math.random() < 0.5 ? 'small' : 'normal'
+const size = rng() < 0.5 ? 'small' : 'normal'
                 const result = createCow(noa, scene, x, z, y, size)
                 if (result) {
                     spawnedPositions.push([x, z]) // Запоминаем позицию

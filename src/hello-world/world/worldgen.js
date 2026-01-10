@@ -23,7 +23,6 @@ export { getHeightAt } from "./height.js";
 import { createNoise2D } from "simplex-noise";
 import { generatePlantsInChunk } from "./plants.js";
 // Пещерные шумы (оставляем твои)
-const iceSpikeNoise = createNoise2D(() => Math.random());
 const postGenQueue = []
 let postGenRunning = false
 
@@ -42,6 +41,42 @@ function runPostGenQueue(noa, ids) {
 function N2(fn, x, z, s) {
     return fn(x * s, z * s);
 }
+// ===== SEED =====
+const RAW_SEED = localStorage.getItem("worldSeed") || "default"
+
+function hashSeed(str) {
+    let h = 2166136261 >>> 0
+    for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i)
+        h = Math.imul(h, 16777619)
+    }
+    return h >>> 0
+}
+
+const WORLD_SEED = hashSeed(String(RAW_SEED))
+
+// ===== GLOBAL RNG (ТОЛЬКО ДЛЯ NOISE) =====
+function makeRNG(seed) {
+    let s = seed || 1
+    return () => {
+        s = (s * 16807) % 2147483647
+        return (s - 1) / 2147483646
+    }
+}
+
+const globalRng = makeRNG(WORLD_SEED)
+const iceSpikeNoise = createNoise2D(globalRng)
+
+// ===== CHUNK RNG =====
+function makeChunkRNG(cx, cz, salt = 0) {
+    return makeRNG(
+        WORLD_SEED ^
+        (cx * 73856093) ^
+        (cz * 19349663) ^
+        salt
+    )
+}
+
 
 // =====================================================
 // УРОВЕНЬ ВОДЫ
@@ -159,7 +194,8 @@ const WATER = ids.waterID;
         // Определяем, является ли это первым чанком (для логирования)
         // Объявляем ДО try блока, чтобы переменная была доступна во всей функции
         const isFirstChunk = y === 0 && (Math.abs(x) < 100 && Math.abs(z) < 100)
-        
+            const chunkRnd = makeChunkRNG(x, z)
+
         try {
             // Логируем ВСЕ вызовы для отладки проблемы в продакшене
             console.log("🔵 GEN CALL - worldDataNeeded вызван!", { id, x, y, z, shape: data?.shape })
@@ -252,7 +288,8 @@ if (biome === "ice") {
 
     // Большие пики
     if (spike < 0.008) {
-        const spikeHeight = Math.floor(12 + Math.random() * 18); // 12–30
+const spikeHeight = Math.floor(12 + chunkRnd()
+ * 18)
         for (let h = 0; h < spikeHeight; h++) {
             if (j + h < SY) data.set(i, j + h, k, ICE);
         }
@@ -261,7 +298,7 @@ if (biome === "ice") {
 
     // Средние пики
     if (spike < 0.018) {
-        const spikeHeight = Math.floor(6 + Math.random() * 8); // 6–14
+        const spikeHeight = Math.floor(6 + chunkRnd() * 8); // 6–14
         for (let h = 0; h < spikeHeight; h++) {
             if (j + h < SY) data.set(i, j + h, k, ICE);
         }
@@ -270,7 +307,7 @@ if (biome === "ice") {
 
     // Малые пики
     if (spike < 0.04) {
-        const spikeHeight = Math.floor(2 + Math.random() * 4); // 2–5
+        const spikeHeight = Math.floor(2 + chunkRnd() * 4); // 2–5
         for (let h = 0; h < spikeHeight; h++) {
             if (j + h < SY) data.set(i, j + h, k, ICE);
         }
@@ -381,7 +418,7 @@ if (biome === "ice") {
     if (biome === "snow") {
 
         // рыхлый снег
-        if (Math.random() < 0.2) {
+        if (chunkRnd()< 0.2) {
             data.set(i, j, k, SNOW_BLOCK);
             continue;
         }
@@ -482,30 +519,71 @@ if (wy >= height - 4 && wy <= height) {
 }
 
 
+// =====================================================
+// ПОВЕРХНОСТЬ — ЕДИНСТВЕННОЕ МЕСТО ДЛЯ GRASS
+// =====================================================
+if (wy === height) {
 
+    switch (biome) {
+
+        case "desert":
+            data.set(i, j, k, SAND);
+            break;
+
+        case "snow":
+            data.set(i, j, k, SNOW);
+            break;
+
+        case "ice":
+            data.set(i, j, k, ICE);
+            break;
+
+        case "tundra":
+            data.set(i, j, k, TUNDRA_GRASS);
+            break;
+
+        case "dry":
+            data.set(i, j, k, GRASS_DRY);
+            break;
+
+        case "mountain":
+            data.set(i, j, k, STONE);
+            break;
+
+        default:
+            // 🌱 ВОТ ОНА — ТРАВА
+            data.set(i, j, k, GRASS);
+    }
+
+    continue;
+}
+
+// =====================================================
 // ПОДПОВЕРХНОСТЬ (как в Minecraft)
+// =====================================================
 if (wy < height) {
 
     const depth = height - wy;
 
-    // 1–3 блока под поверхностью — всегда земля
-    if (depth <= 5) {
-        data.set(i, j, k, GRASS);
-        continue;
-    }
-    if (depth <= 15) {
+    // 1–3 блока под поверхностью — земля
+    if (depth <= 3) {
         data.set(i, j, k, DIRT);
         continue;
     }
-        if (depth <= 25) {
+
+    // 4–15 — гравий (переход)
+    if (depth <= 15) {
         data.set(i, j, k, GRAVEL);
         continue;
     }
-            if (depth <= 35) {
+
+    // 16–30 — плотная порода
+    if (depth <= 30) {
         data.set(i, j, k, ANDESITE);
         continue;
     }
-    // Все, что глубже — камень (для нормальных гор)
+
+    // глубже — камень
     data.set(i, j, k, STONE);
     continue;
 }
@@ -527,7 +605,7 @@ if (wy < height) {
 
                             case "tundra":
                                 // 20% плитки станут полноценными блоками снега
-                                if (Math.random() < 0.20) {
+                                if (chunkRnd() < 0.20) {
                                     data.set(i, j, k, TUNDRA_GRASS_BLOCK);   // ❄ плотный снег
                                     continue;
                                 }
@@ -537,7 +615,7 @@ if (wy < height) {
                             case "snow":
 
                                 // 20% плитки станут полноценными блоками снега
-                                if (Math.random() < 0.20) {
+                                if (chunkRnd() < 0.20) {
                                     data.set(i, j, k, SNOW_BLOCK);   // ❄ плотный снег
                                     continue;
                                 }
@@ -559,7 +637,7 @@ if (wy < height) {
 
                             case "dry":
                                 // 20% плитки станут полноценными блоками снега
-                                if (Math.random() < 0.20) {
+                                if (chunkRnd() < 0.20) {
                                     data.set(i, j, k, GRASS_DRY_BLOCK);   // ❄ плотный снег
                                     continue;
                                 }

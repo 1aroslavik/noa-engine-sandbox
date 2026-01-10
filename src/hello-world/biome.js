@@ -1,40 +1,47 @@
 import { createNoise2D } from "simplex-noise"
 
-// фиксированный seed
-let seed = Math.floor(Math.random() * 1e9)
-function rnd() {
-    seed = (seed * 16807) % 2147483647
-    return (seed - 1) / 2147483646
+// ===== SEED (ОДИН И ТОТ ЖЕ, ЧТО В worldgen.js) =====
+const RAW_SEED = localStorage.getItem("worldSeed") || "default"
+
+function hashSeed(str) {
+    let h = 2166136261 >>> 0
+    for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i)
+        h = Math.imul(h, 16777619)
+    }
+    return h >>> 0
 }
 
-// биомные шумы
-const _temp = createNoise2D(rnd)
-const _moist = createNoise2D(rnd)
-const _height = createNoise2D(rnd)
+const WORLD_SEED = hashSeed(String(RAW_SEED))
 
-// шумы воды
-const _lake  = createNoise2D(rnd)
-const _river = createNoise2D(rnd)
-const _water = createNoise2D(rnd)
+// ===== RNG =====
+function makeRNG(seed) {
+    let s = seed || 1
+    return () => {
+        s = (s * 16807) % 2147483647
+        return (s - 1) / 2147483646
+    }
+}
 
+const rng = makeRNG(WORLD_SEED)
 
-// ====================================================
-// ✨ ПЕЩЕРНЫЕ ШУМЫ (с правильными экспортами!)
-// ====================================================
+// ===== BIOME NOISE =====
+const _temp   = createNoise2D(rng)
+const _moist  = createNoise2D(rng)
+const _height = createNoise2D(rng)
 
-// Swiss-cheese caves
-export const _caveCheese = createNoise2D(rnd)
+// ===== WATER NOISE =====
+const _lake  = createNoise2D(rng)
+const _river = createNoise2D(rng)
+const _water = createNoise2D(rng)
 
-// Worm tunnels
-export const _caveWormA = createNoise2D(rnd)
-export const _caveWormB = createNoise2D(rnd)
+// ===== CAVE NOISE =====
+export const _caveCheese = createNoise2D(rng)
+export const _caveWormA  = createNoise2D(rng)
+export const _caveWormB  = createNoise2D(rng)
+export const _caveCrack  = createNoise2D(rng)
 
-// Surface cracks
-export const _caveCrack = createNoise2D(rnd)
-
-
-// ========= ЭКСПОРТЫ ШУМОВ =========
-
+// ========= NOISE API =========
 export function noiseTemp(x, z) {
     return _temp(x * 0.001, z * 0.001)
 }
@@ -58,7 +65,6 @@ export function noiseRiver(x, z) {
 export function noiseWater(x, z) {
     return _water(x, z)
 }
-
 
 // ========= BIOME LOGIC =========
 export function getBiome(x, z) {

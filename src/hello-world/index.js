@@ -360,8 +360,8 @@ function forceSpawnPlayer(ids) {
 // =====================================================
 async function spawnPlayerOnSurface(ids) {
     // выбираем безопасную область вокруг (0,0)
-    const x = Math.floor(Math.random() * 40 - 20) // -20..20
-    const z = Math.floor(Math.random() * 40 - 20)
+    const x = 0
+    const z = 0
 
     // получаем высоту
     let h = getHeightAt(x, z)

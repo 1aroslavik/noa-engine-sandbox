@@ -8,11 +8,22 @@ const HOTBAR_SLOTS = 9
 export const inventory = new Array(HOTBAR_SLOTS).fill(null)
 export let selectedSlot = 0
 
-// Экспортируем функцию для получения selectedSlot
 export function getSelectedSlot() {
   return selectedSlot
 }
 
+
+function normalizeItemName(name) {
+  if (!name) return name
+  return name
+    .toLowerCase()
+    .replace(/_block$/, '')   // grass_block → grass
+    .replace(/_$/, '')        // grass_ → grass
+}
+
+// ------------------------------------------------------------
+// 🧱 UI контейнер
+// ------------------------------------------------------------
 const container = document.createElement('div')
 container.style.position = 'absolute'
 container.style.bottom = '20px'
@@ -20,147 +31,204 @@ container.style.left = '50%'
 container.style.transform = 'translateX(-50%)'
 container.style.display = 'flex'
 container.style.gap = '8px'
-container.style.pointerEvents = 'auto' // Включаем взаимодействие для кликов
+container.style.pointerEvents = 'auto'
 container.style.zIndex = '9999'
 document.body.appendChild(container)
 
+function getInventoryIcon(itemName) {
+  const baseTex = window.cvaeTextures || {}
+  const genTex  = window.generatedTextures || {}
+  const sideMap = window.blockSideMap || {}
+
+  const base = normalizeItemName(itemName)
+
+  // 0️⃣ generatedTextures (САМЫЙ ВАЖНЫЙ ПРИОРИТЕТ)
+  if (genTex[base + "_side"]) {
+    return "data:image/png;base64," + genTex[base + "_side"]
+  }
+  if (genTex[base]) {
+    return "data:image/png;base64," + genTex[base]
+  }
+
+  // 1️⃣ side (обычные блоки)
+  if (sideMap[base] && baseTex[sideMap[base]]) {
+    return "data:image/png;base64," + baseTex[sideMap[base]]
+  }
+
+  // 2️⃣ прямое совпадение
+  if (baseTex[base]) {
+    return "data:image/png;base64," + baseTex[base]
+  }
+
+  // 3️⃣ top
+  if (baseTex[base + "_top"]) {
+    return "data:image/png;base64," + baseTex[base + "_top"]
+  }
+
+  // 4️⃣ fallback
+  if (baseTex["dirt"]) {
+    return "data:image/png;base64," + baseTex["dirt"]
+  }
+
+  return null
+}
+window.addEventListener("texturesReady", () => {
+  console.log("🎒 Inventory: textures ready → redraw")
+  drawInventory()
+})
+
+// ------------------------------------------------------------
+// 🎒 Отрисовка инвентаря
+// ------------------------------------------------------------
 function drawInventory() {
   container.innerHTML = ''
+
   for (let i = 0; i < HOTBAR_SLOTS; i++) {
     const slot = document.createElement('div')
     slot.style.width = '48px'
     slot.style.height = '48px'
-    slot.style.border = i === selectedSlot ? '3px solid yellow' : '2px solid gray'
     slot.style.background = '#222'
     slot.style.display = 'flex'
     slot.style.flexDirection = 'column'
     slot.style.alignItems = 'center'
-    slot.style.justifyContent = 'center'
-    slot.style.color = '#fff'
+    slot.style.justifyContent = 'flex-start'
     slot.style.font = '10px monospace'
-    slot.style.fontSize = '10px'
-    slot.style.lineHeight = '1.0'
-    slot.style.pointerEvents = 'auto'
-    slot.style.userSelect = 'none'
+    slot.style.color = '#fff'
     slot.style.cursor = 'pointer'
+    slot.style.userSelect = 'none'
+    slot.style.position = 'relative'
     slot.dataset.slotIndex = String(i)
 
     const item = inventory[i]
+
+    // --------------------------------------------------------
+    // 📦 СЛОТ С ПРЕДМЕТОМ
+    // --------------------------------------------------------
     if (item) {
-      slot.draggable = true // Включаем перетаскивание для слотов с предметами
-      
-      // Получаем метаданные предмета для отображения редкости
+      slot.draggable = true
+
       const itemDef = getItemDefinition(item.name)
       const rarityColor = getRarityColor(itemDef.rarity)
-      
-      // Устанавливаем цвет границы в зависимости от редкости
-      if (i === selectedSlot) {
-        slot.style.border = `3px solid ${rarityColor}`
-      } else {
-        slot.style.border = `2px solid ${rarityColor}`
+
+      slot.style.border =
+        i === selectedSlot
+          ? `3px solid ${rarityColor}`
+          : `2px solid ${rarityColor}`
+
+      // 🖼 ИКОНКА
+const texURL = getInventoryIcon(item.name)
+      if (texURL) {
+        const icon = document.createElement('div')
+        icon.style.width = '32px'
+        icon.style.height = '32px'
+        icon.style.marginTop = '2px'
+        icon.style.backgroundImage = `url(${texURL})`
+        icon.style.backgroundSize = 'cover'
+        icon.style.backgroundRepeat = 'no-repeat'
+        icon.style.backgroundPosition = 'center'
+        icon.style.imageRendering = 'pixelated'
+        icon.style.pointerEvents = 'none'
+        slot.appendChild(icon)
       }
-      
+
+      // 🏷 НАЗВАНИЕ
       const name = document.createElement('div')
       name.textContent = getShortName(item.name)
-      name.style.pointerEvents = 'none' // Не блокируем drag события
-      name.style.fontSize = '10px'
-      name.style.lineHeight = '1.0'
-      name.style.textAlign = 'center'
+      name.style.fontSize = '9px'
+      name.style.opacity = '0.9'
+      name.style.whiteSpace = 'nowrap'
       name.style.overflow = 'hidden'
       name.style.textOverflow = 'ellipsis'
-      name.style.whiteSpace = 'nowrap'
       name.style.maxWidth = '100%'
-      
+      name.style.pointerEvents = 'none'
+      slot.appendChild(name)
+
+      // 🔢 КОЛИЧЕСТВО
       const count = document.createElement('div')
       count.textContent = item.count
+      count.style.position = 'absolute'
+      count.style.bottom = '2px'
+      count.style.right = '4px'
       count.style.fontSize = '10px'
-      count.style.opacity = '0.85'
-      count.style.pointerEvents = 'none' // Не блокируем drag события
-      count.style.marginTop = '2px'
-      count.style.lineHeight = '1.0'
-      
-      slot.appendChild(name)
+      count.style.color = 'white'
+      count.style.textShadow = '1px 1px 2px black'
+      count.style.pointerEvents = 'none'
       slot.appendChild(count)
-      
-      // Добавляем tooltip с информацией о предмете
-      slot.title = `${itemDef.description}\nРедкость: ${itemDef.rarity}\nТип: ${itemDef.type}\nСложность: ${itemDef.craftDifficulty}`
-      
-      // Обработчик начала перетаскивания
+
+      // tooltip
+      slot.title = `${itemDef.description}
+Редкость: ${itemDef.rarity}
+Тип: ${itemDef.type}
+Сложность: ${itemDef.craftDifficulty}`
+
+      // drag start
       slot.addEventListener('dragstart', (e) => {
         e.stopPropagation()
-        const data = JSON.stringify({ slotIndex: i, item: item })
-        e.dataTransfer.setData('text/plain', data)
+        e.dataTransfer.setData(
+          'text/plain',
+          JSON.stringify({ slotIndex: i, item })
+        )
         e.dataTransfer.effectAllowed = 'move'
         slot.style.opacity = '0.5'
-        console.log('Начато перетаскивание:', item.name)
       })
-      
-      // Обработчик конца перетаскивания
-      slot.addEventListener('dragend', (e) => {
+
+      // drag end
+      slot.addEventListener('dragend', () => {
         slot.style.opacity = '1'
-        console.log('Завершено перетаскивание')
       })
+
+    // --------------------------------------------------------
+    // ⬜ ПУСТОЙ СЛОТ
+    // --------------------------------------------------------
     } else {
-      slot.draggable = false // Пустые слоты не перетаскиваются
-      // Для пустых слотов используем стандартный цвет
-      if (i === selectedSlot) {
-        slot.style.border = '3px solid yellow'
-      } else {
-        slot.style.border = '2px solid gray'
-      }
+      slot.draggable = false
+      slot.style.border =
+        i === selectedSlot
+          ? '3px solid yellow'
+          : '2px solid gray'
     }
-    
-    // Обработчик клика для выбора слота
+
+    // выбор слота
     slot.addEventListener('click', () => {
       selectedSlot = i
       drawInventory()
     })
-    
-    // Обработчик двойного клика для использования мяса
+
+    // двойной клик — еда
     slot.addEventListener('dblclick', (e) => {
       e.preventDefault()
       e.stopPropagation()
-      
-      if (item && (item.name === 'meat' || item.name === 'pig_meat' || item.name === 'cow_meat' || item.name === 'bear_meat')) {
-        const currentHealth = getPlayerHealth()
-        const maxHealth = getPlayerMaxHealth()
-        
-        // Используем мясо только если здоровье не полное
-        if (currentHealth < maxHealth) {
-          // Определяем количество восстановления здоровья в зависимости от типа мяса
-          let healAmount = 10 // По умолчанию
-          if (item.name === 'pig_meat') {
-            healAmount = 15
-          } else if (item.name === 'cow_meat') {
-            healAmount = 20
-          } else if (item.name === 'bear_meat') {
-            healAmount = 30
-          }
-          
-          healPlayer(healAmount)
-          
-          // Удаляем один предмет из инвентаря
+
+      if (
+        item &&
+        ['meat', 'pig_meat', 'cow_meat', 'bear_meat'].includes(item.name)
+      ) {
+        const hp = getPlayerHealth()
+        const maxHp = getPlayerMaxHealth()
+        if (hp < maxHp) {
+          let heal = 10
+          if (item.name === 'pig_meat') heal = 15
+          if (item.name === 'cow_meat') heal = 20
+          if (item.name === 'bear_meat') heal = 30
+
+          healPlayer(heal)
           removeItem(i, 1)
-          
-          console.log(`🍖 Использовано мясо: ${item.name}, восстановлено ${healAmount} здоровья`)
-        } else {
-          console.log('💚 Здоровье уже полное!')
         }
       }
     })
+
     container.appendChild(slot)
   }
 }
+
 drawInventory()
 
+// ------------------------------------------------------------
+// ➕ Добавление предмета
+// ------------------------------------------------------------
 export function addItem(name, count = 1) {
-  // Проверяем, что name валидный
-  if (!name || name === 'null' || name === '') {
-    console.warn('Попытка добавить невалидный предмет:', name)
-    return false
-  }
-  
-  // стакаем по имени
+  if (!name) return false
+
   for (let i = 0; i < HOTBAR_SLOTS; i++) {
     if (inventory[i]?.name === name) {
       inventory[i].count += count
@@ -168,7 +236,7 @@ export function addItem(name, count = 1) {
       return true
     }
   }
-  // ищем пустой слот
+
   for (let i = 0; i < HOTBAR_SLOTS; i++) {
     if (!inventory[i]) {
       inventory[i] = { name, count }
@@ -176,62 +244,32 @@ export function addItem(name, count = 1) {
       return true
     }
   }
+
   return false
 }
 
-// Функция для поиска следующего непустого слота
-function findNextNonEmptySlot(startIndex = 0) {
-  // Ищем начиная со следующего слота после startIndex
-  for (let i = 1; i < HOTBAR_SLOTS; i++) {
-    const idx = (startIndex + i) % HOTBAR_SLOTS
-    if (inventory[idx] && inventory[idx].count > 0) {
-      return idx
-    }
-  }
-  // Если не нашли, возвращаем null (все слоты пустые)
-  return null
-}
-
-// Удаление предмета из инвентаря (уменьшение количества или удаление)
+// ------------------------------------------------------------
+// ➖ Удаление предмета
+// ------------------------------------------------------------
 export function removeItem(slotIndex, count = 1) {
-  if (slotIndex < 0 || slotIndex >= HOTBAR_SLOTS) return false
   if (!inventory[slotIndex]) return false
-  
-  const wasSelectedSlot = slotIndex === selectedSlot
-  const itemName = inventory[slotIndex].name
-  
+
   inventory[slotIndex].count -= count
-  
   if (inventory[slotIndex].count <= 0) {
     inventory[slotIndex] = null
-    
-    // Если это был выбранный слот и он стал пустым, переключаемся на следующий непустой
-    if (wasSelectedSlot) {
-      const nextSlot = findNextNonEmptySlot(slotIndex)
-      if (nextSlot !== null) {
-        selectedSlot = nextSlot
-        console.log(`🔄 Автоматическое переключение на слот ${nextSlot + 1} (${inventory[nextSlot].name})`)
-      } else {
-        // Все слоты пустые, оставляем выбранный слот как есть
-        console.log('📭 Все слоты пустые')
-      }
-    }
   }
-  
+
   drawInventory()
   return true
 }
 
-function setSelected(idx) {
-  selectedSlot = (idx + HOTBAR_SLOTS) % HOTBAR_SLOTS
-  drawInventory()
-}
-
+// ------------------------------------------------------------
+// 🔄 Управление
+// ------------------------------------------------------------
 export function getSelectedItem() {
   return inventory[selectedSlot]
 }
 
-// Экспортируем функции в window для доступа из других модулей
 // @ts-ignore
 window.getSelectedItem = getSelectedItem
 // @ts-ignore
@@ -240,15 +278,18 @@ window.getSelectedSlot = getSelectedSlot
 window.removeItem = removeItem
 
 window.addEventListener('wheel', e => {
-  setSelected(selectedSlot + (e.deltaY > 0 ? 1 : -1))
+  selectedSlot = (selectedSlot + (e.deltaY > 0 ? 1 : -1) + HOTBAR_SLOTS) % HOTBAR_SLOTS
+  drawInventory()
 })
 
 window.addEventListener('keydown', e => {
   if (e.code?.startsWith('Digit')) {
     const n = parseInt(e.code.slice(5), 10)
-    if (n >= 1 && n <= HOTBAR_SLOTS) setSelected(n - 1)
+    if (n >= 1 && n <= HOTBAR_SLOTS) {
+      selectedSlot = n - 1
+      drawInventory()
+    }
   }
 })
-// после функции drawInventory()
-window.addEventListener('inventoryUpdate', drawInventory)
+
 window.addEventListener('inventoryUpdate', drawInventory)

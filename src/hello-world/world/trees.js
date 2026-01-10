@@ -1,15 +1,43 @@
 // trees.js
 import { getBiome } from "../biome.js"
 import { getHeightAt } from "./height.js"
+// ================================
+//        SEEDED RNG
+// ================================
+const RAW_SEED = localStorage.getItem("worldSeed") || "default"
+
+function hashSeed(str) {
+    let h = 2166136261 >>> 0
+    for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i)
+        h = Math.imul(h, 16777619)
+    }
+    return h >>> 0
+}
+
+function makeRNG(seed) {
+    let s = seed || 1
+    return () => {
+        s = (s * 16807) % 2147483647
+        return (s - 1) / 2147483646
+    }
+}
+
+function makeChunkRNG(cx, cz, salt = 7777) {
+    const seed =
+        hashSeed(RAW_SEED) ^
+        (cx * 73856093) ^
+        (cz * 19349663) ^
+        salt
+
+    return makeRNG(seed >>> 0)
+}
 
 // быстрое размещение блока
 function B(noa, id, x, y, z) {
     noa.setBlock(id, x, y, z)
 }
 
-function rand(a, b) {
-    return a + Math.floor(Math.random() * (b - a + 1))
-}
 import { getWaterLevel } from "./worldgen.js"
 
 // Проверка места для дерева
@@ -50,11 +78,10 @@ function isGoodTreeSpot(noa, ids, x, y, z) {
    — разветвление вокруг ствола
 ======================================================================== */
 
-export function drawOak(noa, blocks, x, y, z) {
+export function drawOak(noa, blocks, x, y, z, rand, rng) {
     const LOG = blocks["log"]
     const LEAF = blocks["leaves_oak"]
 
-    // высота ствола
     const trunk = rand(5, 9)
 
     for (let i = 0; i < trunk; i++) {
@@ -62,16 +89,11 @@ export function drawOak(noa, blocks, x, y, z) {
     }
 
     const topY = y + trunk
-
-    // --------------------------------
-    // 1. Несколько случайных веток
-    // --------------------------------
     const branchCount = rand(3, 5)
 
     for (let b = 0; b < branchCount; b++) {
-
-        let angle = Math.random() * Math.PI * 2
-        let length = rand(3, 6)
+        const angle = rng() * Math.PI * 2
+        const length = rand(3, 6)
 
         let bx = x
         let by = topY - rand(0, 2)
@@ -80,19 +102,15 @@ export function drawOak(noa, blocks, x, y, z) {
         for (let i = 0; i < length; i++) {
             bx += Math.round(Math.cos(angle))
             bz += Math.round(Math.sin(angle))
-            by += (Math.random() < 0.3 ? 1 : 0)
+            if (rng() < 0.3) by++
 
             B(noa, LOG, bx, by, bz)
         }
 
-        // облако листьев вокруг конца ветки
-        makeLeafCloud(noa, LEAF, bx, by, bz, rand(2, 3))
+        makeLeafCloud(noa, LEAF, bx, by, bz, rand(2, 3), rand)
     }
 
-    // --------------------------------
-    // 2. Центральная верхняя крона
-    // --------------------------------
-    makeLeafCloud(noa, LEAF, x, topY + 1, z, 3)
+    makeLeafCloud(noa, LEAF, x, topY + 1, z, 3, rand)
 }
 
 
@@ -100,11 +118,11 @@ export function drawOak(noa, blocks, x, y, z) {
                           🍃 ОБЛАКО ЛИСТЬЕВ
 ======================================================================== */
 
-function makeLeafCloud(noa, leaf, cx, cy, cz, r) {
+function makeLeafCloud(noa, leaf, cx, cy, cz, r, rand) {
     for (let dx = -r; dx <= r; dx++)
         for (let dy = -r; dy <= r; dy++)
             for (let dz = -r; dz <= r; dz++) {
-                let d = dx*dx + dy*dy + dz*dz
+                const d = dx*dx + dy*dy + dz*dz
                 if (d <= r*r + rand(-1, 2)) {
                     B(noa, leaf, cx + dx, cy + dy, cz + dz)
                 }
@@ -119,40 +137,29 @@ function makeLeafCloud(noa, leaf, cx, cy, cz, r) {
    — много "ярусов"
 ======================================================================== */
 
-export function drawSnowPine(noa, blocks, x, y, z) {
+export function drawSnowPine(noa, blocks, x, y, z, rand, rng) {
     const LOG = blocks["log"]
     const LEAF = blocks["leaves_pine"]
 
     const height = rand(10, 16)
 
-    // ствол
     for (let i = 0; i < height; i++) {
         B(noa, LOG, x, y + i, z)
     }
 
     const top = y + height
-
-    // где начинается хвоя
     const leafStart = y + Math.floor(height * 0.25)
-
     let radius = rand(4, 6)
 
-    // слои листвы снизу вверх
     for (let yy = leafStart; yy <= top; yy++) {
-
         for (let dx = -radius; dx <= radius; dx++)
             for (let dz = -radius; dz <= radius; dz++)
-                if (dx*dx + dz*dz <= radius*radius + 1) {
+                if (dx*dx + dz*dz <= radius*radius + 1)
                     B(noa, LEAF, x + dx, yy, z + dz)
-                }
 
-        // постепенное уменьшение радиуса
-        if (yy % 2 === 0 && radius > 1) {
-            radius--
-        }
+        if (yy % 2 === 0 && radius > 1) radius--
     }
 
-    // макушка
     B(noa, LEAF, x, top + 1, z)
 }
 
@@ -161,57 +168,40 @@ export function drawSnowPine(noa, blocks, x, y, z) {
 // =============================================================
 
 
-export function drawDeadTree(noa, blocks, x, y, z) {
+export function drawDeadTree(noa, blocks, x, y, z, rand, rng) {
+    const LOG = blocks["log"]
+    const height = rand(4, 7)
 
-    const LOG = blocks["log"];
+    for (let i = 0; i < height; i++)
+        B(noa, LOG, x, y + i, z)
 
-    // ----------------------------
-    // 1. СТВОЛ (прямой, сухой)
-    // ----------------------------
-    const height = rand(4, 7);
-    for (let i = 0; i < height; i++) {
-        B(noa, LOG, x, y + i, z);
-    }
-
-    const topY = y + height;
-
-    // -------------------------------------------------
-    // 2. L-system ДЛЯ СУХИХ ВЕТОК (простая Y-форма)
-    // -------------------------------------------------
-
+    const topY = y + height
     const branches = [
         { dx: 1, dz: 0 },
         { dx: -1, dz: 0 },
         { dx: 0, dz: 1 },
         { dx: 0, dz: -1 },
-    ];
+    ]
 
     for (const b of branches) {
-        if (Math.random() > 0.6) continue; // не все ветки обязательны
+        if (rng() > 0.6) continue
 
-        let bx = x;
-        let by = topY;
-        let bz = z;
-
-        const len = rand(2, 4);
+        let bx = x, by = topY, bz = z
+        const len = rand(2, 4)
 
         for (let i = 0; i < len; i++) {
+            bx += b.dx
+            bz += b.dz
+            if (rng() > 0.4) by++
 
-            // движение ветки по направлению
-            bx += b.dx;
-            bz += b.dz;
+            B(noa, LOG, bx, by, bz)
 
-            // лёгкий подъём вверх
-            if (Math.random() > 0.4) by += 1;
-
-            B(noa, LOG, bx, by, bz);
-
-            // случайный разветвитель
-            if (i === Math.floor(len / 2) && Math.random() > 0.5) {
-                const sx = bx + (Math.random() > 0.5 ? 1 : -1);
-                const sz = bz + (Math.random() > 0.5 ? 1 : -1);
-                const sy = by + rand(0, 1);
-                B(noa, LOG, sx, sy, sz);
+            if (i === Math.floor(len / 2) && rng() > 0.5) {
+                B(noa, LOG,
+                    bx + (rng() > 0.5 ? 1 : -1),
+                    by + rand(0, 1),
+                    bz + (rng() > 0.5 ? 1 : -1)
+                )
             }
         }
     }
@@ -224,19 +214,16 @@ export function drawDeadTree(noa, blocks, x, y, z) {
    — листья опускаются вниз
 ======================================================================== */
 
-export function drawPalm(noa, blocks, x, y, z) {
+export function drawPalm(noa, blocks, x, y, z, rand, rng) {
     const LOG = blocks["log"]
     const LEAF = blocks["leaves_savanna"]
 
     const height = rand(7, 11)
-
-    let px = x
-    let pz = z
+    let px = x, pz = z
 
     const leanX = rand(-1, 1) * 0.3
     const leanZ = rand(-1, 1) * 0.3
 
-    // ствол
     for (let i = 0; i < height; i++) {
         B(noa, LOG, Math.round(px), y + i, Math.round(pz))
         px += leanX
@@ -247,29 +234,23 @@ export function drawPalm(noa, blocks, x, y, z) {
     const cx = Math.round(px)
     const cz = Math.round(pz)
 
-    // направления листьев
     const dirs = [
         [1, 0], [-1, 0], [0, 1], [0, -1],
         [1,1], [-1,1], [1,-1], [-1,-1]
     ]
 
     for (const [dx, dz] of dirs) {
-        let lx = cx
-        let lz = cz
-        let ly = topY
-
+        let lx = cx, lz = cz, ly = topY
         const length = rand(4, 6)
 
         for (let i = 0; i < length; i++) {
             lx += dx
             lz += dz
-            if (i > 1 && Math.random() < 0.5) ly--
-
+            if (i > 1 && rng() < 0.5) ly--
             B(noa, LEAF, lx, ly, lz)
         }
     }
 
-    // центр листьев
     for (let dx = -1; dx <= 1; dx++)
         for (let dz = -1; dz <= 1; dz++)
             B(noa, LEAF, cx + dx, topY, cz + dz)
@@ -283,6 +264,9 @@ export function drawPalm(noa, blocks, x, y, z) {
 export function generateTreesInChunk(noa, ids, x0, y0, z0) {
     const blocks = ids.blocks
 
+    const rng = makeChunkRNG(x0 >> 5, z0 >> 5)
+    const rand = (a, b) => a + Math.floor(rng() * (b - a + 1))
+
     for (let i = 0; i < 12; i++) {
 
         const x = x0 + rand(0, 31)
@@ -291,41 +275,29 @@ export function generateTreesInChunk(noa, ids, x0, y0, z0) {
 
         const biome = getBiome(x, z)
 
-        // --------------------------------------------
-        // 🌵 DRY — ТОЛЬКО мёртвые стволы
-        // --------------------------------------------
-// 🌵 DRY — мёртвые деревья с ветками
-if (biome === "dry") {
-    if (Math.random() < 0.55)
-        drawDeadTree(noa, blocks, x, y + 1, z)
-    continue
-}
+        // 🌵 DRY — сухие деревья
+        if (biome === "dry") {
+            if (rng() < 0.55)
+                drawDeadTree(noa, blocks, x, y + 1, z, rand, rng)
+            continue
+        }
 
-
-        // --------------------------------------------
-        // 🌳 ДУБЫ — ЛЕС + РАВНИНЫ
-        // --------------------------------------------
+        // 🌳 ДУБЫ
         if (biome === "forest" || biome === "plains") {
-            if (Math.random() < 0.42)
-                drawOak(noa, blocks, x, y + 1, z)
+            if (rng() < 0.42)
+                drawOak(noa, blocks, x, y + 1, z, rand, rng)
         }
 
-        // --------------------------------------------
-        // 🌲 ЕЛИ — ЛЕС, ГОРЫ, ТУНДРА
-        // --------------------------------------------
+        // 🌲 ЕЛИ
         if (biome === "forest" || biome === "mountain" || biome === "tundra") {
-
-            // разнообразие елей
-            if (Math.random() < 0.20)
-                drawSnowPine(noa, blocks, x, y + 1, z)
+            if (rng() < 0.20)
+                drawSnowPine(noa, blocks, x, y + 1, z, rand, rng)
         }
 
-        // --------------------------------------------
-        // 🌴 ПАЛЬМЫ — ПУСТЫНИ
-        // --------------------------------------------
+        // 🌴 ПАЛЬМЫ
         if (biome === "desert" || biome === "red_desert") {
-            if (Math.random() < 0.45)
-                drawPalm(noa, blocks, x, y + 1, z)
+            if (rng() < 0.45)
+                drawPalm(noa, blocks, x, y + 1, z, rand, rng)
         }
     }
 }

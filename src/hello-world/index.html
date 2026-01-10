@@ -198,6 +198,24 @@
       border-color: #ff0000;
       background: rgba(200, 0, 0, 0.7);
     }
+    #entity-name {
+  position: fixed;
+  top: calc(50% + 18px); /* чуть ниже прицела */
+  left: 50%;
+  transform: translateX(-50%);
+  color: white;
+  font-size: 18px;
+  font-family: monospace;
+  text-shadow:
+    2px 2px 0 #000,
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000;
+  pointer-events: none;
+  z-index: 100;
+  display: none;
+}
+
   </style>
 </head>
 
@@ -212,6 +230,8 @@
     <div class="death-subtext">Respawning...</div>
   </div>
   <div id="reticle">+</div>
+  <div id="entity-name"></div>
+
   <div id="health-container">
     <div id="health-label">Health</div>
     <div id="health-bar-container">

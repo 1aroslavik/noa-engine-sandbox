@@ -38,6 +38,12 @@ CLASS_MAP = {
     "cactus":24,
     "mashroom_leg":25,
     "red_mashroom_top":26,
+    "bear_brown":27,
+    "bear_white":28,
+    "cow":29,
+    "pig":30,
+    "pumpkin":31,
+    "pumpkin_tail":32,
 }
 
 # Количество классов ОПРЕДЕЛЯЕТСЯ АВТОМАТИЧЕСКИ
@@ -49,8 +55,7 @@ LATENT_DIM = 64
 # === LOAD MODEL ===
 model = CVAE(img_size=IMG_SIZE, latent_dim=LATENT_DIM, num_classes=NUM_CLASSES)
 model.load_state_dict(torch.load(
-    "C:/Users/hitle/OneDrive/Рабочий стол/noa-examples-master/vae/textures_cvae.pth",
-    map_location="cpu"
+    "src/hello-world/vae/textures_cvae.pth",
 ))
 model.eval()
 

@@ -9,6 +9,10 @@ window.generatedTextures = window.generatedTextures || {}
 
 export async function initMaterialsAndBlocks(noa) {
     const tex = await generateTextures()
+    // @ts-ignore
+window.cvaeTextures = tex
+window.dispatchEvent(new Event("texturesReady"))
+
     const make = b64 => "data:image/png;base64," + b64
 
     const blocks = {}
@@ -106,6 +110,8 @@ export async function initMaterialsAndBlocks(noa) {
     makeSimple("stone")
     makeSimple("tundra_grass_top")
     makeSimple("snow_side")
+    makeSimple("pumpkin")
+  
 
     make3("grass", "grass_top", "dirt", "grass_side")
     make3("grass_dry", "grass_dry_top", "dirt", "grass_dry_side")
@@ -491,84 +497,61 @@ if (materials["grass_dry_top"]) {
 // ------------------------------------------------------------
 // Материал для свиней
 // ------------------------------------------------------------
-export function createPigMaterial(noa, size = 'normal') {
-    const material = noa.rendering.makeStandardMaterial()
-    
-    if (size === 'small') {
-        // Маленькие свиньи - более яркий розовый
-        // Увеличиваем красный компонент и эмиссию для более яркого вида
-        material.diffuseColor = new Color3(1, 0.3, 0.3) // Более яркий розовый
-        material.emissiveColor = new Color3(0.4, 0.12, 0.12) // Более яркая эмиссия
-    } else {
-        // Стандартные свиньи - обычный розовый
-        material.diffuseColor = new Color3(1, 0.2, 0.2)
-        material.emissiveColor = new Color3(0.3, 0.06, 0.06)
-    }
-    
-    return material
+export function createPigMaterial(noa) {
+    return createAnimalCVAETextureMaterial(noa, "pig")
 }
 // ------------------------------------------------------------
 // Материал для медведей (коричневый или белый)
 // ------------------------------------------------------------
-export function createBearMaterial(scene, type = "brown") {
-    const mat = new BABYLON.StandardMaterial("bearMat", scene)
+export function createBearMaterial(noa, type = "brown") {
+    const texName =
+        type === "polar"
+            ? "bear_white"
+            : "bear_brown"
 
-    if (type === "polar") {
-        // ❄ Белый медведь
-        mat.diffuseColor = new BABYLON.Color3(0.95, 0.95, 1.0)
-        mat.emissiveColor = new BABYLON.Color3(0.15, 0.15, 0.2)
-    } else {
-        // 🟤 Коричневый медведь
-        mat.diffuseColor = new BABYLON.Color3(0.45, 0.32, 0.22)
-        mat.emissiveColor = new BABYLON.Color3(0.1, 0.07, 0.05)
-    }
-
-    return mat
+    return createAnimalCVAETextureMaterial(noa, texName)
 }
 
 // ------------------------------------------------------------
 // Материал для коров (белый с черными пятнами)
 // ------------------------------------------------------------
 export function createCowMaterial(noa) {
-    const material = noa.rendering.makeStandardMaterial()
+    return createAnimalCVAETextureMaterial(noa, "cow")
+}
+// ------------------------------------------------------------
+// 🎨 Материал животного из CVAE-текстуры (как у блоков)
+// ------------------------------------------------------------
+export function createAnimalCVAETextureMaterial(noa, textureName) {
     const scene = noa.rendering.getScene()
-    
-    if (scene) {
-        // Создаем canvas для текстуры с черными пятнами
-        const canvas = document.createElement('canvas')
-        canvas.width = 256
-        canvas.height = 256
-        const ctx = canvas.getContext('2d')
-        
-        // Белый фон
-        ctx.fillStyle = '#FFFFFF'
-        ctx.fillRect(0, 0, 256, 256)
-        
-        // Черные пятна - большие, редкие и далеко друг от друга (как у настоящей коровы)
-        ctx.fillStyle = '#000000'
-        const spots = [
-            // Очень большие пятна, расположенные далеко друг от друга
-            { x: 50, y: 50, w: 120, h: 130 },      // Верхний левый угол
-            { x: 200, y: 80, w: 110, h: 125 },     // Верхний правый угол
-            { x: 30, y: 200, w: 125, h: 135 },     // Нижний левый угол
-            { x: 180, y: 180, w: 105, h: 115 },   // Нижний правый угол
-        ]
-        
-        for (const spot of spots) {
-            ctx.beginPath()
-            // Используем более плавные края для более естественного вида
-            ctx.ellipse(spot.x, spot.y, spot.w / 2, spot.h / 2, 0, 0, Math.PI * 2)
-            ctx.fill()
-        }
-        
-        // Создаем текстуру из canvas
-        const texture = new BABYLON.Texture(canvas.toDataURL(), scene)
-        material.diffuseTexture = texture
+    if (!scene) return null
+
+    // @ts-ignore
+    const texMap = window.cvaeTextures
+    if (!texMap || !texMap[textureName]) {
+        console.warn(`⚠ CVAE текстура не найдена: ${textureName}`)
+        return null
     }
-    
-    // Базовый белый цвет
-    material.diffuseColor = new Color3(0.95, 0.95, 0.95)
-    material.emissiveColor = new Color3(0.1, 0.1, 0.1)
-    
-    return material
+
+    const mat = new BABYLON.StandardMaterial(
+        `animal_${textureName}`,
+        scene
+    )
+
+    mat.diffuseTexture = new BABYLON.Texture(
+        "data:image/png;base64," + texMap[textureName],
+        scene
+    )
+
+    mat.specularColor = new BABYLON.Color3(0, 0, 0)
+    mat.emissiveColor = new BABYLON.Color3(0.1, 0.1, 0.1)
+
+    return mat
+}
+// @ts-ignore
+window.blockSideMap = {
+  grass: "grass_side",
+  snow: "snow_transition_side",
+  tundra_grass: "tundra_grass_side",
+  grass_dry: "grass_dry_side",
+  oak_log: "log_side",
 }
