@@ -38,35 +38,72 @@ function B(noa, id, x, y, z) {
 // ===============================================
 // 🍄 ГИГАНТСКИЙ ГРИБ (красный или коричневый)
 // ===============================================
+// ===============================================
+// 🍄 ГИГАНТСКИЙ ГРИБ (улучшенная форма)
+// ===============================================
 export function drawMushroom(noa, blocks, x, z, rand, rng) {
-    const STEM = blocks["mushroom_leg"];
+    const STEM = blocks["mushroom_leg"]
     const caps = [
         blocks["red_mushroom_top"],
         blocks["brown_mashroom_top"]
-    ].filter(Boolean);
+    ].filter(Boolean)
 
-    if (!STEM || caps.length === 0) return;
+    if (!STEM || caps.length === 0) return
 
-    const CAP = caps[Math.floor(rng() * caps.length)];
-    const y = getHeightAt(x, z);
-    const height = rand(6, 10);
-    const r = rand(4, 6);
+    const CAP = caps[Math.floor(rng() * caps.length)]
+    const y = getHeightAt(x, z)
+
+    // --------------------
+    // НОЖКА
+    // --------------------
+    const height = rand(5, 9)
+
+    let cx = x
+    let cz = z
 
     for (let i = 0; i < height; i++) {
-        B(noa, STEM, x, y + i, z);
+        // лёгкий изгиб ножки
+        if (rng() < 0.25) cx += rand(-1, 1)
+        if (rng() < 0.25) cz += rand(-1, 1)
+
+        B(noa, STEM, cx, y + i, cz)
+
+        // утолщение у основания
+        if (i < 2 && rng() < 0.6) {
+            B(noa, STEM, cx + 1, y + i, cz)
+            B(noa, STEM, cx - 1, y + i, cz)
+            B(noa, STEM, cx, y + i, cz + 1)
+            B(noa, STEM, cx, y + i, cz - 1)
+        }
     }
 
-    const capY = y + height;
+    const capY = y + height
 
-    for (let dx = -r; dx <= r; dx++) {
-        for (let dz = -r; dz <= r; dz++) {
-            if (dx*dx + dz*dz <= r*r + 0.5) {
-                B(noa, CAP, x + dx, capY, z + dz);
+    // --------------------
+    // ШЛЯПКА (КУПОЛ)
+    // --------------------
+    const baseRadius = rand(3, 5)
+    const layers = rand(2, 3)
+
+    for (let ly = 0; ly < layers; ly++) {
+        const r = baseRadius - ly
+
+        for (let dx = -r; dx <= r; dx++) {
+            for (let dz = -r; dz <= r; dz++) {
+                const dist = Math.sqrt(dx * dx + dz * dz)
+
+                // округлая форма + рваные края
+                if (dist <= r + rng() * 0.3) {
+                    B(noa, CAP, cx + dx, capY + ly, cz + dz)
+                }
             }
         }
     }
 
-    B(noa, CAP, x, capY + 2, z);
+    // небольшая верхушка
+    if (rng() < 0.7) {
+        B(noa, CAP, cx, capY + layers, cz)
+    }
 }
 
 //
