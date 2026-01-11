@@ -142,6 +142,27 @@ export function drawLog(noa, blocks, x, z, rand, rng) {
     }
 }
 
+
+// ===============================================
+// 🎃 ТЫКВЫ (1–3 блока на земле)
+// ===============================================
+export function drawPumpkins(noa, blocks, x, z, rand, rng) {
+    const PUMPKIN = blocks["pumpkin"]
+    if (!PUMPKIN) return
+
+    const y = getHeightAt(x, z)
+
+    const count = rand(1, 3)
+    for (let i = 0; i < count; i++) {
+        const dx = rand(-2, 2)
+        const dz = rand(-2, 2)
+
+        // ставим только если воздух
+        if (noa.getBlock(x + dx, y, z + dz) === 0) {
+            B(noa, PUMPKIN, x + dx, y, z + dz)
+        }
+    }
+}
 //
 // ===============================================
 // 🪨 БОЛЬШОЙ ВАЛУН (КАМЕНЬ)
@@ -198,9 +219,13 @@ export function generatePlantsInChunk(noa, ids, x, y, z) {
     if (rng() < 0.04) {
         drawBoulder(noa, blocks, wx, wz, rand, rng);
     }
+    // 🎃 ТЫКВЫ (везде, кроме льда и пустыни)
+    if (biome !== "ice" && biome !== "desert" && rng() < 5) {
+        drawPumpkins(noa, blocks, wx, wz, rand, rng)
+    }
 
     // 🌵 КАКТУСЫ
-    if (biome === "desert" && rng() < 0.1) {
+    if (biome === "desert" && rng() < 1) {
         drawCactus(noa, blocks, wx, wz, rand);
     }
 

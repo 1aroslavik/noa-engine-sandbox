@@ -41,6 +41,12 @@ function getInventoryIcon(itemName) {
   const sideMap = window.blockSideMap || {}
 
   const base = normalizeItemName(itemName)
+// ====================================================
+  // 🥩 УНИВЕРСАЛЬНАЯ ИКОНКА ДЛЯ ЛЮБОГО МЯСА
+  // ====================================================
+  if (itemName === 'meat' || itemName.endsWith('_meat')) {
+  return window.location.origin + '/meat.png'
+}
 
   // 0️⃣ generatedTextures (САМЫЙ ВАЖНЫЙ ПРИОРИТЕТ)
   if (genTex[base + "_side"]) {
@@ -123,7 +129,7 @@ const texURL = getInventoryIcon(item.name)
         icon.style.height = '32px'
         icon.style.marginTop = '2px'
         icon.style.backgroundImage = `url(${texURL})`
-        icon.style.backgroundSize = 'cover'
+icon.style.backgroundSize = 'contain'
         icon.style.backgroundRepeat = 'no-repeat'
         icon.style.backgroundPosition = 'center'
         icon.style.imageRendering = 'pixelated'

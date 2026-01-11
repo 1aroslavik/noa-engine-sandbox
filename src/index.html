@@ -12,6 +12,19 @@
   >
 
   <style>
+    .game-tip {
+  margin-top: 20px;
+  margin-left: 20px;
+  max-width: 320px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #ffd27d;
+
+  text-shadow: 2px 2px 0 #000;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
     html, body {
       margin: 0;
       padding: 0;
@@ -126,6 +139,10 @@
     <ul>
       <li>Maeva Anastasia</li>
       <li>Babenco Iaroslava</li>
+      <div id="gameTip" class="game-tip">
+  Bears can fight back.
+</div>
+
     </ul>
 
   </div>
@@ -148,6 +165,52 @@
       localStorage.setItem("worldSeed", seed);
       window.location.href = "hello-world/";
     }
+     const tips = [
+    "Bears can fight back. Be careful.",
+    "Double-click meat in your inventory to restore health.",
+    "Different meat restores different amounts of health.",
+    "Polar bears are more dangerous than they look.",
+    "Watch animals closely — they react to damage.",
+    "Meat from bears restores more health than pork.",
+    "Animals may panic and run away when hit.",
+    "Don't like the textures? Just reload the page — they will change.",
+  "Do you really feel okay killing bears?",
+  "If you see a bug — it's not a bug.",
+  "Trees underwater? They just like swimming.",
+  "Procedural generation means chaos is intentional.",
+  "Every world is broken in its own unique way.",
+  "If something looks strange — blame the seed.",
+  "Nature is random. Deal with it.",
+  "This world was not designed. It happened.",
+  "Sometimes the world generates faster than logic.",
+  "If it works — don't touch it.",
+  "Reloading fixes more problems than debugging.",
+  "Welcome to procedural reality.",
+  "Yes, this is intended. Probably.",
+  "The engine knows what it's doing. Maybe.",
+  "If an animal behaves weirdly — it's thinking.",
+  "Floating trees are a feature.",
+  "You are not lost. The world is.",
+  "Every glitch tells a story.",
+  "This game is held together by math and hope."
+  ];
+
+  const tipEl = document.getElementById("gameTip");
+   function showRandomTip() {
+    tipEl.style.opacity = 0;
+
+    setTimeout(() => {
+      const randomIndex = Math.floor(Math.random() * tips.length);
+      tipEl.textContent = tips[randomIndex];
+      tipEl.style.opacity = 1;
+    }, 500);
+  }
+
+  // первый показ
+  showRandomTip();
+
+  // смена каждые 4 секунды
+  setInterval(showRandomTip, 4000);
   </script>
 
 </body>

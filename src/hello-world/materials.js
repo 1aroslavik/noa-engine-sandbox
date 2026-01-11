@@ -3,6 +3,9 @@ import { generateTextures } from "./texture_runtime_loader.js"
 import { Color3 } from '@babylonjs/core'
 import * as BABYLON from '@babylonjs/core'
 
+// @ts-ignore
+window.blocksMap = window.blocksMap || {}
+
 // Глобальное хранилище для динамически созданных текстур
 // @ts-ignore
 window.generatedTextures = window.generatedTextures || {}
@@ -532,10 +535,11 @@ export function createAnimalCVAETextureMaterial(noa, textureName) {
         return null
     }
 
-    const mat = new BABYLON.StandardMaterial(
-        `animal_${textureName}`,
-        scene
-    )
+const mat = new BABYLON.StandardMaterial(
+    `animal_${textureName}_${BABYLON.Tools.RandomId()}`,
+    scene
+)
+
 
     mat.diffuseTexture = new BABYLON.Texture(
         "data:image/png;base64," + texMap[textureName],
@@ -543,7 +547,7 @@ export function createAnimalCVAETextureMaterial(noa, textureName) {
     )
 
     mat.specularColor = new BABYLON.Color3(0, 0, 0)
-    mat.emissiveColor = new BABYLON.Color3(0.1, 0.1, 0.1)
+mat.emissiveColor = new BABYLON.Color3(0, 0, 0) // ❗ НЕТ СВЕТА ПО УМОЛЧАНИЮ
 
     return mat
 }

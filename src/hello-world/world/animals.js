@@ -183,7 +183,8 @@ function buildPigMesh(scene, material, size = 'normal') {
 // ------------------------------------------------------------
 export function createPig(noa, scene, x, z, y = null, size = 'normal') {
     const groundY = y !== null ? y : getHeightAt(x, z)
-    
+
+
     // Определяем параметры в зависимости от размера
     const isSmall = size === 'small'
     const width = isSmall ? 0.4 : 0.7
@@ -571,6 +572,22 @@ function registerTickHandler() {
                 
                 // Проверяем свиней
                 for (const pig of pigs) {
+                    // 🏃 ПАНИКА — УБЕГАЕТ
+if (pig.panicTime > 0) {
+    pig.panicTime--
+
+    const runSpeed = pig.speed * 8
+    pig.currentRotation = pig.panicAngle - Math.PI / 2
+    pig.targetAngle = pig.panicAngle
+
+    pig.mesh.rotation.y = pig.currentRotation
+
+    pig.body.velocity[0] = Math.sin(pig.currentRotation) * runSpeed
+    pig.body.velocity[2] = Math.cos(pig.currentRotation) * runSpeed
+
+    continue // ❗ ПРОПУСКАЕМ обычный AI
+}
+
                     const pigPos = currentNoa.entities.getPosition(pig.id)
                     if (!pigPos) continue
                     
@@ -678,8 +695,9 @@ if (name) {
         
         // Обновляем подсветку для всех свиней (каждый тик)
         for (const pig of pigs) {
-            if (!pig.material || !pig.originalEmissive) continue
-            
+if (!pig.material || !pig.originalEmissive) continue
+                if (pig.isHit) continue // 🔥 ВАЖНО
+
             const shouldHighlight = pig === targetedPig
             if (pig.isHighlighted !== shouldHighlight) {
                 pig.isHighlighted = shouldHighlight
@@ -709,7 +727,8 @@ if (name) {
         // Обновляем подсветку для всех коров (каждый тик)
         for (const cow of cows) {
             if (!cow.material || !cow.originalEmissive) continue
-            
+                if (cow.isHit) continue // 🔥
+
             const shouldHighlight = cow === targetedCow
             if (cow.isHighlighted !== shouldHighlight) {
                 cow.isHighlighted = shouldHighlight
@@ -734,7 +753,8 @@ if (name) {
         // Обновляем подсветку для всех медведей (каждый тик)
         for (const bear of bears) {
             if (!bear.material || !bear.originalEmissive) continue
-            
+                if (bear.isHit) continue // 🔥
+
             const shouldHighlight = bear === targetedBear
             if (bear.isHighlighted !== shouldHighlight) {
                 bear.isHighlighted = shouldHighlight
@@ -1937,6 +1957,8 @@ export function damagePig(noa, pig) {
     if (!pig || pig.health <= 0) return
     
     pig.health -= 1
+        playHitFeedback(pig) // 👈 ВОТ ЭТО
+
     console.log(`🐷 Pig took damage! Health: ${pig.health}/${pig.maxHealth}`)
     
     // If health reached 0, remove pig and add meat to inventory
@@ -1968,6 +1990,8 @@ export function damageCow(noa, cow) {
     if (!cow || cow.health <= 0) return
     
     cow.health -= 1
+        playHitFeedback(cow) // 👈 ВОТ ЭТО
+
     console.log(`🐄 Cow took damage! Health: ${cow.health}/${cow.maxHealth}`)
     
         if (cow.health <= 0) {
@@ -1995,6 +2019,8 @@ export function damageBear(noa, bear) {
     if (!bear || bear.health <= 0) return
     
     bear.health -= 1
+        playHitFeedback(bear) // 👈 ВОТ ЭТО
+
     console.log(`🐻 Bear took damage! Health: ${bear.health}/${bear.maxHealth}`)
     
     if (bear.health <= 0) {
@@ -2209,51 +2235,92 @@ const z = z0 + Math.floor(rng() * 32)
         
         if (tooClose) continue // Пропускаем эту позицию
 
-        // Спавним свинок в подходящих биомах
-        if (biome === "plains" || biome === "forest" || biome === "dry") {
-if (rng() < 0.4){
-                const size = Math.random() < 0.5 ? 'small' : 'normal'
-                const result = createPig(noa, scene, x, z, y, size)
-                if (result) {
-                    spawnedPositions.push([x, z]) // Запоминаем позицию
-                }
-            }
-        }
-        // ================================
-// 🐻 СПАВН МЕДВЕДЕЙ ПО БИОМАМ
-// ================================
+let spawned = false
 
-// ❄ Белые медведи — только холодные биомы
-if (biome === "snow" || biome === "tundra" || biome === "ice") {
-    if (rng() < 0.25) { // 25% шанс
-        const size = Math.random() < 0.3 ? 'small' : 'normal'
-        const result = createBear(noa, scene, x, z, y, "polar", size)
-        if (result) {
+// 🐷
+if (!spawned && (biome === "plains" || biome === "forest" || biome === "dry")) {
+    if (rng() < 0.4) {
+        const size = rng() < 0.5 ? 'small' : 'normal'
+        if (createPig(noa, scene, x, z, y, size)) {
             spawnedPositions.push([x, z])
+            spawned = true
         }
     }
 }
 
-// 🟫 Коричневые медведи — лес, тайга, горы
-if (biome === "forest" || biome === "dry" || biome === "mountain") {
-    if (rng() < 0.35) { // 35% шанс
+// 🐻 POLAR
+else if (!spawned && (biome === "snow" || biome === "tundra" || biome === "ice")) {
+    if (rng() < 0.25) {
+        const size = rng() < 0.3 ? 'small' : 'normal'
+        if (createBear(noa, scene, x, z, y, "polar", size)) {
+            spawnedPositions.push([x, z])
+            spawned = true
+        }
+    }
+}
+
+// 🐻 BROWN
+else if (!spawned && (biome === "forest" || biome === "dry" || biome === "mountain")) {
+    if (rng() < 0.35) {
         const size = rng() < 0.4 ? 'small' : 'normal'
-        const result = createBear(noa, scene, x, z, y, "brown", size)
-        if (result) {
+        if (createBear(noa, scene, x, z, y, "brown", size)) {
             spawnedPositions.push([x, z])
+            spawned = true
         }
     }
 }
 
-        // Спавним коров в тех же биомах, что и свиньи
-        if (biome === "plains" || biome === "forest" || biome === "dry") {
-            if (Math.random() < 0.3) { // 30% шанс спавна коровы (уменьшил с 50%)
-const size = rng() < 0.5 ? 'small' : 'normal'
-                const result = createCow(noa, scene, x, z, y, size)
-                if (result) {
-                    spawnedPositions.push([x, z]) // Запоминаем позицию
-                }
-            }
+// 🐄
+else if (!spawned && (biome === "plains" || biome === "forest" || biome === "dry")) {
+    if (rng() < 0.3) {
+        const size = rng() < 0.5 ? 'small' : 'normal'
+        if (createCow(noa, scene, x, z, y, size)) {
+            spawnedPositions.push([x, z])
+            spawned = true
         }
     }
+}
+    }
+}
+function playHitFeedback(entity) {
+    if (!entity || !entity.mesh || !entity.material) return
+    if (entity.isHit) return
+
+    entity.isHit = true
+
+    const mat  = entity.material
+    const mesh = entity.mesh
+
+    const oldEmissive = mat.emissiveColor.clone()
+    const oldDiffuse  = mat.diffuseColor.clone()
+    const oldScale    = mesh.scaling.clone()
+
+    // 🔴 ВИЗУАЛ УДАРА
+    mat.emissiveColor.set(1, 0.15, 0.15)
+    mat.diffuseColor.set(1, 0.4, 0.4)
+    mesh.scaling.multiplyInPlace(new BABYLON.Vector3(1.1, 0.85, 1.1))
+
+    // ================================
+    // 🏃 ПАНИКА (убегание)
+    // ================================
+    const currentNoa = window.noa
+if (entity.body && currentNoa?.playerEntity) {
+
+      const p = currentNoa.entities.getPosition(currentNoa.playerEntity)
+const e = currentNoa.entities.getPosition(entity.id)
+
+        if (p && e) {
+            const dx = e[0] - p[0]
+            const dz = e[2] - p[2]
+            entity.panicAngle = Math.atan2(dx, dz)
+            entity.panicTime = 120 + Math.floor(Math.random() * 60) // 2–3 сек
+        }
+    }
+
+    setTimeout(() => {
+        mat.emissiveColor.copyFrom(oldEmissive)
+        mat.diffuseColor.copyFrom(oldDiffuse)
+        mesh.scaling.copyFrom(oldScale)
+        entity.isHit = false
+    }, 120)
 }

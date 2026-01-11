@@ -2,6 +2,19 @@
 
 import { inventory, addItem, removeItem, getSelectedItem, getSelectedSlot } from './inventory.js'
 import { getShortName } from './items.js'
+window.__patchGetBlockID = () => {
+  if (!window.noa || window.noa.__patched) return
+  window.noa.__patched = true
+
+  const oldGet = window.noa.registry.getBlockID
+  window.noa.registry.getBlockID = function (name) {
+    return window.blocksMap?.[name] ?? oldGet.call(this, name)
+  }
+
+  console.log("🔧 getBlockID patched")
+}
+
+
 const MATERIALS = [
   "dirt",
   "stone",
@@ -134,10 +147,40 @@ cell.appendChild(img)
   gridContainer.appendChild(cell)
   grid.push(cell)
 }
+window.__patchGetBlockID()
 
 /* =========================
    RESULT SLOT (VISUAL ONLY)
 ========================= */
+function registerMixedBlock(noa, baseName, topName, sideName, topTex, sideTex) {
+  window.blocksMap ||= {}
+  window.blockIdCounter ||= 10000 // безопасная зона
+
+  // если уже зарегистрирован — всё
+  if (window.blocksMap[baseName]) return window.blocksMap[baseName]
+
+  const make = b64 => "data:image/png;base64," + b64
+
+  const matTop  = "mat_" + topName
+  const matSide = "mat_" + sideName
+
+  // материалы (перерегистрация безопасна)
+  noa.registry.registerMaterial(matTop,  { textureURL: make(topTex) })
+  noa.registry.registerMaterial(matSide, { textureURL: make(sideTex) })
+
+  // ❗ РЕГИСТРАЦИЯ БЛОКА ТЕМ ЖЕ СПОСОБОМ, КАК У ТЕБЯ ВСЁ ОСТАЛЬНОЕ
+  const id = window.blockIdCounter++
+  const blockID = noa.registry.registerBlock(id, {
+    material: [matTop, matTop, matSide],
+    solid: true,
+    opaque: true
+  })
+
+  window.blocksMap[baseName] = blockID
+
+  console.log("✅ MIXED BLOCK REGISTERED:", baseName, blockID)
+  return blockID
+}
 
 export const resultSlot = document.createElement("div")
 resultSlot.style.width = "48px"
@@ -302,30 +345,35 @@ const topTex  = await mixPixels(recipe.a, recipe.b, recipe.ratio)
 window.generatedTextures ||= {}
 window.generatedTextures[sideName] = sideTex
 window.generatedTextures[topName] = topTex
+const noa = window.noa
+if (!noa) return
 
-window.dispatchEvent(new CustomEvent("textureGenerated", {
-  detail: { textureName: topName, textureData: topTex }
-}))
-window.dispatchEvent(new CustomEvent("textureGenerated", {
-  detail: { textureName: sideName, textureData: sideTex }
-}))
+registerMixedBlock(noa, baseName, topName, sideName, topTex, sideTex)
+// 🔧 РЕГИСТРИРУЕМ СКРАФЧЕННЫЙ БЛОК КАК ОБЫЧНЫЙ БЛОК-ПРЕДМЕТ
+window.itemDefinitions ||= {}
+
+if (!window.itemDefinitions[baseName]) {
+  window.itemDefinitions[baseName] = {
+    name: baseName,
+    type: "block",        // ❗ ВОТ ОНО
+    rarity: "rare",
+    craftDifficulty: 3,
+    description: "Скрафченный блок",
+  }
+
+  console.log("📦 itemDefinition added for", baseName)
+}
+
+addItem(baseName, 1)
+
+
 
 
   // сохраняем текстуру
   window.generatedTextures ||= {}
 
 
-  // даём время на регистрацию
-  await new Promise(r => setTimeout(r, 200))
-await new Promise(r => setTimeout(r, 300))
 
-const blocksMap = window.blocksMap
-if (!blocksMap || !blocksMap[baseName]) {
-  console.error("❌ Блок не зарегистрирован:", baseName)
-  return
-}
-
-addItem(baseName, 1)
 
 
   // очистка сетки
