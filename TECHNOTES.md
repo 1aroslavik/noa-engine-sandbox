@@ -219,45 +219,110 @@ Results:
 
 - same world for same seed  
 - same trees  
-- reproducible CVAE texture classes  
+- same plants and decorations
 
-# 9. Crafting System
+## 9 Crafting System
 
-A **2×2 grid recipe system** with **runtime texture mixing** via CVAE.
+The crafting system is based on a **2×2 crafting grid** and is fully **runtime-driven**.
+It does not rely on predefined textures or static block assets.
 
-## 9.1 Recipe Matching
+The system is split into two parts:
+- visual crafting interface (UI only)
+- runtime logic for texture generation and block registration
 
-Base recipes (static, always available):
-- `log → planks (×4)`
-- `planks + planks → stick (×4)`
-- `dirt + log → wood`
-- `stone + log → brick` 
-- `dirt + stone → coal` 
-- `sand + log → glass`
-
-Pattern matching:
-1. Normalize item names: `dirt_plains, dirt_tundra → dirt`
-2. Check base recipes first (exact position or sorted item set)
-3. Dynamic recipe generation exists but is disabled
-
-## 9.2 Runtime Texture Mixing
-
-Recipes with `textureMix` trigger CVAE texture generation:
-
-For multi-sided blocks (`_side` + `_top`), both textures are generated and block registration waits for both.
+This allows crafted results to be generated dynamically during gameplay.
 
 ---
 
-# 🏁 Summary
+### Crafting Interface
 
-This system implements:
+The crafting interface consists of:
+- a 2×2 grid for placing items
+- a result slot showing a preview of the crafted item
+- a list of available recipes generated at runtime
 
-✔ procedural terrain  
-✔ runtime biomes  
-✔ neural runtime textures  
-✔ procedural flora  
-✔ generative animals  
-✔ survival-style ecosystem  
-✔ crafting with runtime texture mixing 
+Items can be placed into the grid by:
+- dragging them from the inventory
+- clicking to place or remove the selected item
+
+Removing an item from the grid always returns it to the inventory.
+
+The crafting window can be opened and closed during gameplay without stopping world simulation.
+
+---
+
+### Runtime Recipe Generation
+
+Recipes are generated **every time the crafting window is opened**.
+
+Recipe properties:
+- 5–10 recipes per session
+- each recipe combines exactly **two different materials**
+- order-independent (A + B equals B + A)
+- each recipe uses a **random mixing ratio** between 25% and 75%
+
+Recipes exist only for the current session and are not stored permanently.
+
+---
+
+### Recipe Matching Logic
+
+When items are placed in the grid:
+- empty cells are ignored
+- crafting is evaluated only when exactly two items are present
+- item names are normalized
+- order does not matter
+
+If a matching recipe is found, the result slot displays a preview.
+The crafted item is created only when the player clicks the result slot.
+
+---
+
+### Runtime Texture Mixing
+
+Crafting a recipe triggers **runtime texture generation**.
+
+For each crafted block:
+- two textures are generated:
+  - `<block>_top`
+  - `<block>_side`
+- textures are created by pixel-level mixing of the source materials
+- generated textures are stored in `window.generatedTextures`
+
+The same texture pipeline is used as for all other runtime-generated blocks,
+ensuring visual consistency.
+
+---
+
+### Dynamic Block Registration
+
+After textures are generated:
+- new materials are registered at runtime
+- a new block is registered using the same registry system as all other blocks
+- the block uses:
+  - top texture
+  - side texture
+  - solid and opaque properties
+
+Crafted blocks are added to the global block map and behave exactly like native world blocks.
+
+No special placement logic is required.
+
+---
+
+### Inventory Integration
+
+Each crafted block is automatically registered as a standard inventory item:
+- `type: "block"`
+- normal placement behavior
+- runtime metadata (rarity, crafting difficulty, description)
+
+After crafting, blocks can be:
+- placed in the world
+- stored in inventory
+- reused in further crafting
+
+---
+
 
 
